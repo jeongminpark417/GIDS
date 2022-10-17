@@ -1,0 +1,3 @@
+[submodule "bam"]
+	path = bam
+	url = https://github.com/ZaidQureshi/bam.git
