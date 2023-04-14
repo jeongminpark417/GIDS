@@ -4,7 +4,7 @@
 #define TYPE float
 
 struct BAM_Feature_Store {
-  const char *const ctrls_paths[1] = {"/dev/libnvm0"};
+  const char *const ctrls_paths[5] = {"/dev/libnvm1","/dev/libnvm2","/dev/libnvm4","/dev/libnvm3","/dev/libnvm0"};
 
   uint32_t cudaDevice = 0;
   uint64_t cudaDeviceId = 0;
@@ -16,7 +16,7 @@ struct BAM_Feature_Store {
   uint32_t nvmNamespace = 1;
   bool doubleBuffered = false;
   size_t numReqs = 100;
-  size_t numPages = 262144 * 4 / 2;
+  size_t numPages = 262144 * 8   ;
   // size_t numPages = 1024*100 ;
   
   size_t startBlock = 0;
@@ -33,10 +33,11 @@ struct BAM_Feature_Store {
   size_t blkSize = 64;
   size_t queueDepth = 1024;
   size_t numQueues = 128;
-  size_t pageSize = 1024 ;
-  uint64_t numElems = 979611600;
+  size_t pageSize = 4096 ;
+  uint64_t numElems = 300LL*1000*1000*1024;
   // std::string name;
 
+  uint64_t read_offset = 0;
   std::vector<Controller *> ctrls;
   page_cache_t *h_pc;
   range_t<TYPE> *h_range;
@@ -47,7 +48,8 @@ struct BAM_Feature_Store {
   std::vector<range_t<TYPE> *> vr;
   //std::vector<array_t<TYPE>> a_vec;
   array_t<TYPE> *a;
-  BAM_Feature_Store()  {};
+  BAM_Feature_Store()  {
+  };
 
   ~BAM_Feature_Store(){
  
@@ -64,11 +66,17 @@ struct BAM_Feature_Store {
   // nvmNamespace, uint32_t cudaDevice, uint64_t queueDepth, uint64_t numQueues,
   // int num_controllers, std::vector<Controller*> &ctrls_vec);
 
+ 
+  float kernel_time = 0; 
   void print();
   int add(int a, int b);
-  void init_controllers();
+  void init_controllers(int ps, uint64_t r_off, uint64_t num_ele, uint64_t cache_size,uint64_t num_ssd, bool cpu_cache, uint64_t cpu_cache_ptr);
   void read_feature_test();
-  void read_feature(uint64_t tensor_ptr, uint64_t index_ptr,int64_t num_index, int dim);
+  void read_feature(uint64_t tensor_ptr, uint64_t index_ptr,int64_t num_index, int dim, int cache_dim);
+  void print_stats();
+  void pin_memory(uint64_t i_index_ptr, int64_t num_pin_page, int dim);	
+  void set_cpu_page(uint64_t cpu_idx, int64_t num_pages);
+  void set_prefetching(uint64_t id_idx, uint64_t prefetch_idx, int64_t num_pages);
 
 };
 
