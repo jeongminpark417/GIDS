@@ -1,3 +1,6 @@
 [submodule "bam"]
 	path = bam
 	url = https://github.com/ZaidQureshi/bam.git
+[submodule "gids_dgl"]
+	path = gids_dgl
+	url = https://github.com/jeongminpark417/dgl.git
