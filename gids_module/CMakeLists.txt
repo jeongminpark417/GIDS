@@ -49,10 +49,10 @@ IF( PYTHONINTERP_FOUND AND PYTHONLIBS_FOUND AND PYBIND11_FOUND )
   )
 message(STATUS "foo include dir: ${CMAKE_CURRENT_SOURCE_DIR}")
 
-ADD_LIBRARY(BAM_Feature_Store SHARED bam_nvme.cu )
+ADD_LIBRARY(BAM_Feature_Store SHARED gids_nvme.cu )
  
-  target_include_directories(BAM_Feature_Store PRIVATE ./include ../../bam/include ../../bam/include/freestanding/include/)
-  target_link_libraries(BAM_Feature_Store PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../bam/build/lib/libnvm.so)
+  target_include_directories(BAM_Feature_Store PRIVATE ./include ../bam/include ../bam/include/freestanding/include/)
+  target_link_libraries(BAM_Feature_Store PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../bam/build/lib/libnvm.so)
   # The library must not have any prefix and should be located in
   # a subfolder that includes the package name. The setup will be
   # more complicated otherwise.

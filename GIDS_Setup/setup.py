@@ -3,7 +3,7 @@ from setuptools import setup
 
 
 setup(
-        name = "BAM_Util",
+        name = "GIDS",
         version     = '0.1.2',
         packages=find_packages(),
         package_data={

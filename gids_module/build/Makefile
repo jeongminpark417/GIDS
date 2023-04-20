@@ -57,10 +57,10 @@ RM = /opt/conda/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /root/BAM_Tensor/BAM_DataLoader/module
+CMAKE_SOURCE_DIR = /root/GIDS/gids_module
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /root/BAM_Tensor/BAM_DataLoader/module/build
+CMAKE_BINARY_DIR = /root/GIDS/gids_module/build
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -87,9 +87,9 @@ rebuild_cache/fast: rebuild_cache
 
 # The main all target
 all: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /root/BAM_Tensor/BAM_DataLoader/module/build/CMakeFiles /root/BAM_Tensor/BAM_DataLoader/module/build//CMakeFiles/progress.marks
+	$(CMAKE_COMMAND) -E cmake_progress_start /root/GIDS/gids_module/build/CMakeFiles /root/GIDS/gids_module/build//CMakeFiles/progress.marks
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 all
-	$(CMAKE_COMMAND) -E cmake_progress_start /root/BAM_Tensor/BAM_DataLoader/module/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /root/GIDS/gids_module/build/CMakeFiles 0
 .PHONY : all
 
 # The main clean target
@@ -129,29 +129,29 @@ BAM_Feature_Store/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/BAM_Feature_Store.dir/build.make CMakeFiles/BAM_Feature_Store.dir/build
 .PHONY : BAM_Feature_Store/fast
 
-bam_nvme.o: bam_nvme.cu.o
-.PHONY : bam_nvme.o
+gids_nvme.o: gids_nvme.cu.o
+.PHONY : gids_nvme.o
 
 # target to build an object file
-bam_nvme.cu.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/BAM_Feature_Store.dir/build.make CMakeFiles/BAM_Feature_Store.dir/bam_nvme.cu.o
-.PHONY : bam_nvme.cu.o
+gids_nvme.cu.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/BAM_Feature_Store.dir/build.make CMakeFiles/BAM_Feature_Store.dir/gids_nvme.cu.o
+.PHONY : gids_nvme.cu.o
 
-bam_nvme.i: bam_nvme.cu.i
-.PHONY : bam_nvme.i
+gids_nvme.i: gids_nvme.cu.i
+.PHONY : gids_nvme.i
 
 # target to preprocess a source file
-bam_nvme.cu.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/BAM_Feature_Store.dir/build.make CMakeFiles/BAM_Feature_Store.dir/bam_nvme.cu.i
-.PHONY : bam_nvme.cu.i
+gids_nvme.cu.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/BAM_Feature_Store.dir/build.make CMakeFiles/BAM_Feature_Store.dir/gids_nvme.cu.i
+.PHONY : gids_nvme.cu.i
 
-bam_nvme.s: bam_nvme.cu.s
-.PHONY : bam_nvme.s
+gids_nvme.s: gids_nvme.cu.s
+.PHONY : gids_nvme.s
 
 # target to generate assembly for a file
-bam_nvme.cu.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/BAM_Feature_Store.dir/build.make CMakeFiles/BAM_Feature_Store.dir/bam_nvme.cu.s
-.PHONY : bam_nvme.cu.s
+gids_nvme.cu.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/BAM_Feature_Store.dir/build.make CMakeFiles/BAM_Feature_Store.dir/gids_nvme.cu.s
+.PHONY : gids_nvme.cu.s
 
 # Help Target
 help:
@@ -162,9 +162,9 @@ help:
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... BAM_Feature_Store"
-	@echo "... bam_nvme.o"
-	@echo "... bam_nvme.i"
-	@echo "... bam_nvme.s"
+	@echo "... gids_nvme.o"
+	@echo "... gids_nvme.i"
+	@echo "... gids_nvme.s"
 .PHONY : help
 
 

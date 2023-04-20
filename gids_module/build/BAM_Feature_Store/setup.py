@@ -9,7 +9,7 @@ setup(
   version     = '0.1.1', # TODO: might want to use commit ID here
   packages    = [ 'BAM_Feature_Store' ],
   package_dir = {
-    '': '/root/BAM_Tensor/BAM_DataLoader/module/build'
+    '': '/root/GIDS/gids_module/build'
   },
   package_data = {
     '': ['BAM_Feature_Store.so']

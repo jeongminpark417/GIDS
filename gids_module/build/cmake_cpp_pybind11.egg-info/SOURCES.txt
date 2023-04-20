@@ -1,8 +1,0 @@
-setup.py
-/root/BAM_Tensor/BAM_DataLoader/module/build/BAM_Feature_Store/BAM_Feature_Store.so
-/root/BAM_Tensor/BAM_DataLoader/module/build/BAM_Feature_Store/__init__.py
-/root/BAM_Tensor/BAM_DataLoader/module/build/BAM_Feature_Store/setup.py
-/root/BAM_Tensor/BAM_DataLoader/module/build/cmake_cpp_pybind11.egg-info/PKG-INFO
-/root/BAM_Tensor/BAM_DataLoader/module/build/cmake_cpp_pybind11.egg-info/SOURCES.txt
-/root/BAM_Tensor/BAM_DataLoader/module/build/cmake_cpp_pybind11.egg-info/dependency_links.txt
-/root/BAM_Tensor/BAM_DataLoader/module/build/cmake_cpp_pybind11.egg-info/top_level.txt

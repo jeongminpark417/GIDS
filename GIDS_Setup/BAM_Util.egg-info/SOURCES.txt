@@ -1,9 +1,0 @@
-setup.py
-BAM_Util/BAM_Util.py
-BAM_Util/__init__.py
-BAM_Util/test.py
-BAM_Util.egg-info/PKG-INFO
-BAM_Util.egg-info/SOURCES.txt
-BAM_Util.egg-info/dependency_links.txt
-BAM_Util.egg-info/top_level.txt
-BAM_Util/../../module/build/BAM_Feature_Store/BAM_Feature_Store.so

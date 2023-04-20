@@ -1,7 +1,0 @@
-[
-{
-  "directory": "/root/BAM_Tensor/BAM_DataLoader/module/build",
-  "command": "/usr/local/cuda/bin/nvcc -forward-unknown-to-host-compiler -DBAM_Feature_Store_EXPORTS -I/opt/conda/include/python3.8 -I/opt/conda/include -I/root/BAM_Tensor/BAM_DataLoader/module/./include -I/root/BAM_Tensor/BAM_DataLoader/module/../../bam/include -I/root/BAM_Tensor/BAM_DataLoader/module/../../bam/include/freestanding/include -Xcompiler=-fPIC -std=c++11 -O3 -g -gencode arch=compute_70,code=sm_70 -gencode arch=compute_80,code=sm_80 -std=c++11 -x cu -c /root/BAM_Tensor/BAM_DataLoader/module/bam_nvme.cu -o CMakeFiles/BAM_Feature_Store.dir/bam_nvme.cu.o",
-  "file": "/root/BAM_Tensor/BAM_DataLoader/module/bam_nvme.cu"
-}
-]
