@@ -1,0 +1,62 @@
+init starts
+SQs: 135	CQs: 135	n_qps: 128
+controllers are initalized
+n pages: 2621440
+page size: 4096
+num elements: 276480000000
+n_ranges_bits: 6
+n_ranges_mask: 63
+pages_dma: 0x7f0514010000	58020410000
+HEREN
+Cond1
+280000 8 1 280000
+Finish Making Page Cache
+create h_range
+numElems: 405f7e0000
+node feature tensor dim:  torch.Size([121751666, 768])
+min label:  tensor(0)
+max label:  tensor(152)
+dgl.heterograph init starting
+dgl.heterograph init successful
+format:  {'created': ['coo'], 'not created': ['csr', 'csc']}
+format:  {'created': ['csc'], 'not created': []}
+g:  Graph(num_nodes={'author': 122383112, 'institute': 25721, 'paper': 121751666},
+      num_edges={('author', 'affiliated_to', 'institute'): 44592586, ('author', 'writes', 'paper'): 386022720, ('paper', 'cites', 'paper'): 1419500592},
+      metagraph=[('author', 'institute', 'affiliated_to'), ('author', 'paper', 'writes'), ('paper', 'paper', 'cites')])
+page size:  4096  off:  0
+num sdd:  1
+model size: 1.580MB
+numElems: 276480000000 t_size:1105920000000 page_size: 4096
+h rnage created
+array_t crate
+init done
+print stats: 
+print array reset: #READ IOs: 0	#Accesses:9808397216	#Misses:8410539776	Miss Rate:0.857484	#Hits: 1397857440	Hit Rate:0.142516	CLSize:4096
+*********************************
+
+print ctrl reset 0: ------------------------------------
+#SSDAccesses:	262829368
+
+Kernel Time: 	 171053
+print stats: 
+print array reset: #READ IOs: 0	#Accesses:970822304	#Misses:832164896	Miss Rate:0.857175	#Hits: 138657408	Hit Rate:0.142825	CLSize:4096
+*********************************
+
+print ctrl reset 0: ------------------------------------
+#SSDAccesses:	26005153
+
+Kernel Time: 	 16923.2
+warp up done
+WB time:  0.0
+sample time: 0.000000
+graph travel time: 26.774688
+agg time:  0.006685495376586914
+transfer time:  0.6912684440612793
+train time:  11.622543573379517
+1dx 1100
+WB time:  0.0
+sample time: 0.000000
+graph travel time: 2.500417
+agg time:  0.00074005126953125
+transfer time:  0.060524702072143555
+train time:  1.0606355667114258
