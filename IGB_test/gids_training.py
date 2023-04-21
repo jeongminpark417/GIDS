@@ -4,15 +4,15 @@ import sklearn.metrics
 import torch, torch.nn as nn, torch.optim as optim
 import time, tqdm, numpy as np
 from models import *
-from dataloader import IGB260MDGLDataset
+from dataloader import IGB260MDGLDataset, OGBDGLDataset
 import csv 
+import warnings
 
 from ogb.graphproppred import DglGraphPropPredDataset
 from ogb.nodeproppred import DglNodePropPredDataset, Evaluator
 
 torch.manual_seed(0)
 dgl.seed(0)
-import warnings
 warnings.filterwarnings("ignore")
 
 def track_acc(g, args, device, label_array=None):
@@ -35,7 +35,6 @@ def track_acc(g, args, device, label_array=None):
         wb_flag = True
     if(args.uva_graph == 1):
         uva_graph = True
-    print("Bam: ", bam_flag, "Pin: ", pin_flag, "Window Buffering: ", wb_flag)
 
     sampler = dgl.dataloading.MultiLayerNeighborSampler(
                 [int(fanout) for fanout in args.fan_out.split(',')])
@@ -49,24 +48,22 @@ def track_acc(g, args, device, label_array=None):
         test_nid = torch.nonzero(g.ndata['test_mask'], as_tuple=True)[0]
         in_feats = g.ndata['features'].shape[1]
         dim = 1024
-        print("in feat: ", in_feats)
 
     elif(args.data == 'OGB'):
-        split_idx = dataset.get_idx_split()
-        train_nid = split_idx["train"]
-        val_nid = split_idx["valid"]
-        test_nid = split_idx["test"]
-        in_feats = g.ndata['feat'].shape[1]
+        g.ndata['features'] = g.ndata['feat']
+        g.ndata['labels'] = g.ndata['label']
+
+        train_nid = torch.nonzero(g.ndata['train_mask'], as_tuple=True)[0]
+        val_nid = torch.nonzero(g.ndata['val_mask'], as_tuple=True)[0]
+        test_nid = torch.nonzero(g.ndata['test_mask'], as_tuple=True)[0]
+        in_feats = g.ndata['features'].shape[1]
         dim = 128
-        print("in feat: ", in_feats)
+
     else:
         train_nid = None
         val_nid = None
         test_nid = None
         in_feats = None
-    print("batch size: ", args.batch_size)
-    print("train_nid: ", train_nid)
-    print("device: ", device)
     train_dataloader = dgl.dataloading.DataLoader(
         g,
         train_nid,
@@ -79,9 +76,6 @@ def track_acc(g, args, device, label_array=None):
         use_uva_graph=uva_graph,
         bam=bam_flag,
         feature_dim=dim,
-        #device=device,
-       # cpu_cache=cpu_cache_flag, 
-       # cpu_cache_size=int(6 * 1024 * 1024 / 4),
         use_prefetch_thread=False,
         pin_prefetcher=False,
         window_buffer=wb_flag,
@@ -182,52 +176,39 @@ def track_acc(g, args, device, label_array=None):
             batch_input_start = time.time()
             if(bam_flag): 
                 batch_inputs = ret
-            #    print("batch inputs: ", batch_inputs)
             else:
                 batch_inputs = blocks[0].srcdata['feat']
             agg_time = (time.time() - batch_input_start)
-           # print("batch input len: ", len(batch_inputs))
-#            print("block0 srcdata: ", blocks[0].srcdata)
-           # print("type: ", type(blocks[0].srcdata))
-           
-            #print("agg time: ", agg_time)
             batch_input_time += agg_time
             batch_input_start = time.time()
-           # b2 = batch_inputs.clone()
             agg_time = (time.time() - batch_input_start)
            
-            
             if(args.data == 'IGB'):
                 batch_labels = blocks[-1].dstdata['labels']
                 
-
-            #elif(args.data == 'OGB'):
-            #    batch_labels = torch.index_select(label_array, 0, b[1].to("cpu")).flatten().to(device)
-            #    batch_labels = batch_labels.to(torch.long)
-                
             else:
-                batch_labels = None
+                batch_labels = blocks[-1].dstdata['labels']
+            
             if(idx == 1):
                 print("batch len: ", len(batch_inputs))
-          # print("batch labels: ", batch_labels)
             train_start = time.time()
-            #batch_pred = model(blocks, batch_inputs)
-            
-            #loss = loss_fcn(batch_pred, batch_labels)
-            #optimizer.zero_grad()
-            #loss.backward()
-            #optimizer.step()
 
-            #epoch_loss += loss.detach()
-            #train_time = train_time + time.time() - train_start
-            #train_acc += (sklearn.metrics.accuracy_score(batch_labels.cpu().numpy(), 
-            #    batch_pred.argmax(1).detach().cpu().numpy())*100)
+            batch_pred = model(blocks, batch_inputs)
+            loss = loss_fcn(batch_pred, batch_labels)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
-            #gpu_mem_alloc += (
-            #    torch.cuda.max_memory_allocated() / 1000000
-            #    if torch.cuda.is_available()
-            #    else 0
-            #)
+            epoch_loss += loss.detach()
+            train_time = train_time + time.time() - train_start
+            train_acc += (sklearn.metrics.accuracy_score(batch_labels.cpu().numpy(), 
+                batch_pred.argmax(1).detach().cpu().numpy())*100)
+
+            gpu_mem_alloc += (
+                torch.cuda.max_memory_allocated() / 1000000
+                if torch.cuda.is_available()
+                else 0
+            )
             if(idx == 1100):
                 print("1dx 1100")
                 if(bam_flag):
@@ -385,25 +366,18 @@ if __name__ == '__main__':
     labels = None
     device = f'cuda:' + str(args.device) if torch.cuda.is_available() else 'cpu'
     if(args.data == 'IGB'):
+        print("Dataset: IGB")
         dataset = IGB260MDGLDataset(args)
         g = dataset[0]
-        print(g.formats())
-        print("format")
         g  = g.formats('csc')
-        print(g.formats())
-        print("format")
     elif(args.data == "OGB"):
         print("Dataset: OGB")
-#        dataset = DglGraphPropPredDataset(name = "ogbn-mag",root='/mnt/nvme15/')
-#        dataset = DglNodePropPredDataset(name="ogbn-mag",root='/mnt/nvme15/')
-        dataset = DglNodePropPredDataset(name="ogbn-papers100M",root='/mnt/nvme15/')
-        g, labels = dataset[0]
-        print("g: ", g)
+        dataset = OGBDGLDataset(args)
+        g = dataset[0]
     else:
         g=None
         dataset=None
     
-
     print(g)
     track_acc(g, args, device, labels)
 

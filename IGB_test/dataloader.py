@@ -10,7 +10,7 @@ warnings.filterwarnings("ignore")
 
 class IGB260M(object):
     def __init__(self, root: str, size: str, in_memory: int, uva_graph: int,  \
-        classes: int, synthetic: int, emb_size: int):
+            classes: int, synthetic: int, emb_size: int, data: str):
         self.dir = root
         self.size = size
         self.synthetic = synthetic
@@ -18,9 +18,11 @@ class IGB260M(object):
         self.num_classes = classes
         self.emb_size = emb_size
         self.uva_graph = uva_graph
-
+        self.data = data
+    
     def num_nodes(self):
-        
+        if self.data == 'OGB':
+            return 111059956
 
         if self.size == 'experimental':
             return 100000
@@ -37,7 +39,14 @@ class IGB260M(object):
     def paper_feat(self) -> np.ndarray:
         num_nodes = self.num_nodes()
         # TODO: temp for bafs. large and full special case
-        if self.size == 'large' or self.size == 'full':
+        if self.data == 'OGB':
+            path = osp.join(self.dir, 'node_feat.npy')
+            if self.in_memory:
+                emb = np.load(path)
+            else:
+                emb = np.load(path, mmap_mode='r')
+
+        elif self.size == 'large' or self.size == 'full':
             path = '/mnt/nvme16/node_feat.npy'
             if self.in_memory:
                 emb = np.memmap(path, dtype='float32', mode='r',  shape=(num_nodes,1024)).copy()
@@ -58,7 +67,9 @@ class IGB260M(object):
     @property
     def paper_label(self) -> np.ndarray:
 
-        if self.size == 'large' or self.size == 'full':
+        if(self.data == 'OGB'):
+            return np.random.randint(low=0, size=111059956, high=171)
+        elif self.size == 'large' or self.size == 'full':
             num_nodes = self.num_nodes()
             if self.num_classes == 19:
                 path = '/mnt/nvme15/IGB260M_part_2/full/processed/paper/node_label_19_extended.npy'
@@ -90,10 +101,13 @@ class IGB260M(object):
     @property
     def paper_edge(self) -> np.ndarray:
         path = osp.join(self.dir, self.size, 'processed', 'paper__cites__paper', 'edge_index.npy')
-        if self.size == 'full':
+        if self.data == 'OGB':
+            path = osp.join(self.dir, 'edge_index.npy')
+        elif self.size == 'full':
             path = '/mnt/nvme15/IGB260M_part_2/full/processed/paper__cites__paper/edge_index.npy'
-        if self.size == 'large':
+        elif self.size == 'large':
             path = '/mnt/nvme7/large/processed/paper__cites__paper/edge_index.npy'
+        
         if self.in_memory or self.uva_graph:
             return np.load(path)
         else:
@@ -108,7 +122,7 @@ class IGB260MDGLDataset(DGLDataset):
 
     def process(self):
         dataset = IGB260M(root=self.dir, size=self.args.dataset_size, in_memory=self.args.in_memory, uva_graph=self.args.uva_graph, \
-            classes=self.args.num_classes, synthetic=self.args.synthetic, emb_size=self.args.emb_size)
+            classes=self.args.num_classes, synthetic=self.args.synthetic, emb_size=self.args.emb_size, data=self.args.data)
 
         node_features = torch.from_numpy(dataset.paper_feat)
         node_edges = torch.from_numpy(dataset.paper_edge)
@@ -179,6 +193,52 @@ class IGB260MDGLDataset(DGLDataset):
 
     def __len__(self):
         return len(self.graphs)
+
+class OGBDGLDataset(DGLDataset):
+    def __init__(self, args):
+        self.dir = args.path
+        self.args = args
+        super().__init__(name='IGB260MDGLDataset')
+
+    def process(self):
+        dataset = IGB260M(root=self.dir, size=self.args.dataset_size, in_memory=self.args.in_memory, uva_graph=self.args.uva_graph, \
+            classes=self.args.num_classes, synthetic=self.args.synthetic, emb_size=self.args.emb_size, data=self.args.data)
+
+        node_features = torch.from_numpy(dataset.paper_feat)
+        node_edges = torch.from_numpy(dataset.paper_edge)
+        node_labels = torch.from_numpy(dataset.paper_label).to(torch.long)
+
+        self.graph = dgl.graph((node_edges[0,:],node_edges[1,:]), num_nodes=node_features.shape[0]) 
+        
+        self.graph.ndata['feat'] = node_features
+        self.graph.ndata['label'] = node_labels
+       
+        self.graph = dgl.remove_self_loop(self.graph)
+        self.graph = dgl.add_self_loop(self.graph)
+
+
+        n_nodes = node_features.shape[0]
+        n_train = int(n_nodes * 0.6)
+        n_val   = int(n_nodes * 0.2)
+            
+        train_mask = torch.zeros(n_nodes, dtype=torch.bool)
+        val_mask = torch.zeros(n_nodes, dtype=torch.bool)
+        test_mask = torch.zeros(n_nodes, dtype=torch.bool)
+            
+        train_mask[:n_train] = True
+        val_mask[n_train:n_train + n_val] = True
+        test_mask[n_train + n_val:] = True
+            
+        self.graph.ndata['train_mask'] = train_mask
+        self.graph.ndata['val_mask'] = val_mask
+        self.graph.ndata['test_mask'] = test_mask
+        
+    def __getitem__(self, i):
+        return self.graph
+
+    def __len__(self):
+        return len(self.graphs)
+
 
 class IGBHeteroDGLDataset(DGLDataset):
     def __init__(self, args):
