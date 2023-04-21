@@ -27,4 +27,4 @@ The scripts for the IGB, OGB, and MAG datasets are located in the example direct
 
 
 ## Graph Strucute Data Type
-DGL supports the CSC and COO file formats for graph structure data. However, when both formats are enabled for the dataloader, the dataloader automatically converts COO to CSR format during the graph sampling process. This conversion consumes more than 700GB of memory for terabyte-scale datasets such as the IGB dataset. To address this issue, we use the CSC format and fix the format for the graph structure data.
+DGL supports the Compressed sparse column (CSC) and Coordinate list (COO) file formats for graph structure data. However, when both formats are enabled for the dataloader, the dataloader automatically converts COO to CSR format during the graph sampling process. This conversion consumes more than 700GB of memory for terabyte-scale datasets such as the IGB dataset. To address this issue, we use the CSC format and fix the format for the graph structure data.
