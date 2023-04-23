@@ -147,13 +147,14 @@ def track_acc(g, category, args, device):
 
         for it, (input_nodes, output_nodes, blocks, ret) in enumerate(train_dataloader):
             #print("blocks: ", blocks[0])
-            
+            #print("idx: ", idx)            
             if(idx == 1000):
                 print("warp up done")
                 if(bam_flag):
                     train_dataloader.print_stats()
                 train_dataloader.print_timer()
-                print("agg time: ", batch_input_time)
+                if(bam_flag == False):
+                    print("feature aggregation time: ", batch_input_time)
                 print("transfer time: ", transfer_time)
                 print("train time: ", train_time)
                 batch_input_time = 0
@@ -201,7 +202,8 @@ def track_acc(g, category, args, device):
                 if(bam_flag):
                     train_dataloader.print_stats()
                 train_dataloader.print_timer()
-                print("agg time: ", batch_input_time)
+                if(bam_flag == False):
+                    print("feature aggregation time: ", batch_input_time)
                 print("transfer time: ", transfer_time)
                 print("train time: ", train_time)
                 batch_input_time = 0

@@ -1,0 +1,29 @@
+Dataset: IGB
+node edge: tensor([[136011405,  28830019],
+        [ 28830019, 136011405],
+        [136011405,  81328391],
+        ...,
+        [ 44868518, 203113760],
+        [203113760, 243329035],
+        [243329035, 203113760]])
+self graph:  {'created': ['csc'], 'not created': []}
+self graph2:  {'created': ['csc'], 'not created': []}
+self graph3:  {'created': ['csc'], 'not created': []}
+self graph4:  {'created': ['csc'], 'not created': []}
+self graph5:  {'created': ['csc'], 'not created': []}
+Graph(num_nodes=269346174, num_edges=3996442004,
+      ndata_schemes={'feat': Scheme(shape=(1024,), dtype=torch.float32), 'label': Scheme(shape=(), dtype=torch.int64), 'train_mask': Scheme(shape=(), dtype=torch.bool), 'val_mask': Scheme(shape=(), dtype=torch.bool), 'test_mask': Scheme(shape=(), dtype=torch.bool)}
+      edata_schemes={})
+model size: 1.145MB
+training start
+batch len:  535906
+warp up done
+graph travel time: 130.089023
+feature aggreagation time:  852.3021228313446
+transfer time:  3.5601611137390137
+train time:  13.148839235305786
+Performance for 100 iteration after 1000 iteration
+graph travel time: 10.859586
+feature aggregation time:  46.64948844909668
+transfer time:  0.34270811080932617
+train time:  1.2162272930145264

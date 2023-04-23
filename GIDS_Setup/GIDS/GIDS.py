@@ -81,14 +81,30 @@ class GIDS():
    
 
     def window_buffer2(self, batch, window):
-        input_tensor = batch[0].to("cuda:0")
-        num_pages = len(input_tensor)
+        if isinstance(batch[0], dict):
+            for key, value in batch[0].items():
+                if(len(value) == 0):
+                    next
+                else:
+                    input_tensor = value.to("cuda:0")
+                    num_pages = len(input_tensor)
+                    val_tensor = torch.ones([num_pages,1], dtype=torch.uint8)
+                    val_tensor_ptr = val_tensor.to('cuda:0')
+                    s_time = time.time()
+                    self.BAM_FS.set_window_buffering(input_tensor.data_ptr(), val_tensor_ptr.data_ptr(), num_pages)
+                    e_time = time.time()
+                    self.WB_time += e_time - s_time
+        else:
+            input_tensor = batch[0].to("cuda:0")
+            num_pages = len(input_tensor)
 
-        val_tensor = torch.ones([num_pages,1], dtype=torch.uint8)
-        val_tensor_ptr = val_tensor.to('cuda:0')
-        s_time = time.time()
-        self.BAM_FS.set_window_buffering(input_tensor.data_ptr(), val_tensor_ptr.data_ptr(), num_pages)
-        e_time = time.time()
-        self.WB_time += e_time - s_time
+            val_tensor = torch.ones([num_pages,1], dtype=torch.uint8)
+            val_tensor_ptr = val_tensor.to('cuda:0')
+            s_time = time.time()
+            self.BAM_FS.set_window_buffering(input_tensor.data_ptr(), val_tensor_ptr.data_ptr(), num_pages)
+            e_time = time.time()
+            self.WB_time += e_time - s_time
+
+    
 
 

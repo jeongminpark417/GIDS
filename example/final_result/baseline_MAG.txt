@@ -1,0 +1,21 @@
+node feature tensor dim:  torch.Size([121751666, 768])
+min label:  tensor(0)
+max label:  tensor(152)
+dgl.heterograph init starting
+dgl.heterograph init successful
+format:  {'created': ['coo'], 'not created': ['csr', 'csc']}
+format:  {'created': ['csc'], 'not created': []}
+g:  Graph(num_nodes={'author': 122383112, 'institute': 25721, 'paper': 121751666},
+      num_edges={('author', 'affiliated_to', 'institute'): 44592586, ('author', 'writes', 'paper'): 386022720, ('paper', 'cites', 'paper'): 1419500592},
+      metagraph=[('author', 'institute', 'affiliated_to'), ('author', 'paper', 'writes'), ('paper', 'paper', 'cites')])
+model size: 1.580MB
+warp up done
+graph travel time: 107.276496
+feature aggregation time:  294.36831426620483
+transfer time:  1.914607048034668
+train time:  9.45741605758667
+1dx 1100
+graph travel time: 8.450577
+feature aggregation time:  24.206572771072388
+transfer time:  0.18880701065063477
+train time:  0.9032692909240723

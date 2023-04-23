@@ -1,0 +1,17 @@
+Dataset: OGB
+Graph(num_nodes=111059956, num_edges=1726745828,
+      ndata_schemes={'feat': Scheme(shape=(128,), dtype=torch.float32), 'label': Scheme(shape=(), dtype=torch.int64), 'train_mask': Scheme(shape=(), dtype=torch.bool), 'val_mask': Scheme(shape=(), dtype=torch.bool), 'test_mask': Scheme(shape=(), dtype=torch.bool)}
+      edata_schemes={})
+model size: 0.420MB
+training start
+batch len:  315225
+warp up done
+graph travel time: 151.827105
+feature aggreagation time:  67.1711916923523
+transfer time:  2.319828510284424
+train time:  11.081687927246094
+Performance for 100 iteration after 1000 iteration
+graph travel time: 6.684018
+feature aggregation time:  5.423351049423218
+transfer time:  0.24658632278442383
+train time:  1.0490784645080566

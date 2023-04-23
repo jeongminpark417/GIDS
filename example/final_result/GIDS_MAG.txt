@@ -6,7 +6,7 @@ page size: 4096
 num elements: 276480000000
 n_ranges_bits: 6
 n_ranges_mask: 63
-pages_dma: 0x7f0514010000	58020410000
+pages_dma: 0x143b42010000	58020410000
 HEREN
 Cond1
 280000 8 1 280000
@@ -31,32 +31,30 @@ h rnage created
 array_t crate
 init done
 print stats: 
-print array reset: #READ IOs: 0	#Accesses:9808397216	#Misses:8410539776	Miss Rate:0.857484	#Hits: 1397857440	Hit Rate:0.142516	CLSize:4096
+print array reset: #READ IOs: 0	#Accesses:9805653824	#Misses:8234704608	Miss Rate:0.839791	#Hits: 1570949216	Hit Rate:0.160209	CLSize:4096
 *********************************
 
 print ctrl reset 0: ------------------------------------
-#SSDAccesses:	262829368
+#SSDAccesses:	257334519
 
-Kernel Time: 	 171053
+Kernel Time: 	 167587
 print stats: 
-print array reset: #READ IOs: 0	#Accesses:970822304	#Misses:832164896	Miss Rate:0.857175	#Hits: 138657408	Hit Rate:0.142825	CLSize:4096
+print array reset: #READ IOs: 0	#Accesses:972370880	#Misses:815914080	Miss Rate:0.839098	#Hits: 156456800	Hit Rate:0.160902	CLSize:4096
 *********************************
 
 print ctrl reset 0: ------------------------------------
-#SSDAccesses:	26005153
+#SSDAccesses:	25497315
 
-Kernel Time: 	 16923.2
+Kernel Time: 	 16555.7
 warp up done
-WB time:  0.0
-sample time: 0.000000
-graph travel time: 26.774688
-agg time:  0.006685495376586914
-transfer time:  0.6912684440612793
-train time:  11.622543573379517
+WB time:  0.2892284393310547
+feature aggregation time: 167.674004
+graph travel time: 26.453107
+transfer time:  0.7503170967102051
+train time:  13.997159957885742
 1dx 1100
-WB time:  0.0
-sample time: 0.000000
-graph travel time: 2.500417
-agg time:  0.00074005126953125
-transfer time:  0.060524702072143555
-train time:  1.0606355667114258
+WB time:  0.02809453010559082
+feature aggregation time: 16.563774
+graph travel time: 2.591647
+transfer time:  0.0660703182220459
+train time:  1.332289218902588

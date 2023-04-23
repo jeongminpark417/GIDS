@@ -1,0 +1,20 @@
+large dataset
+Setting the graph structure
+dgl.heterograph init starting
+dgl.heterograph init successful
+format:  {'created': ['coo'], 'not created': ['csr', 'csc']}
+format:  {'created': ['csc'], 'not created': []}
+g:  Graph(num_nodes={'author': 277220883, 'fos': 712960, 'institute': 26918, 'paper': 269346174},
+      num_edges={('author', 'affiliated_to', 'institute'): 48521486, ('paper', 'cites', 'paper'): 3996442004, ('paper', 'topic', 'fos'): 1050280600, ('paper', 'written_by', 'author'): 716761549},
+      metagraph=[('author', 'institute', 'affiliated_to'), ('paper', 'paper', 'cites'), ('paper', 'fos', 'topic'), ('paper', 'author', 'written_by')])
+model size: 2.515MB
+warp up done
+graph travel time: 176.415772
+feature aggregation time:  3638.5152916908264
+transfer time:  2.847716808319092
+train time:  22.684520721435547
+1dx 1100
+graph travel time: 15.908322
+feature aggregation time:  211.93872141838074
+transfer time:  0.2812492847442627
+train time:  2.2410690784454346
