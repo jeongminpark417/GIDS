@@ -148,7 +148,7 @@ def track_acc(g, category, args, device):
         for it, (input_nodes, output_nodes, blocks, ret) in enumerate(train_dataloader):
             #print("blocks: ", blocks[0])
             #print("idx: ", idx)            
-            if(idx == 1000):
+            if(idx == 100):
                 print("warp up done")
                 if(bam_flag):
                     train_dataloader.print_stats()

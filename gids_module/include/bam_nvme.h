@@ -4,7 +4,11 @@
 #define TYPE float
 
 struct BAM_Feature_Store {
-  const char *const ctrls_paths[5] = {"/dev/libnvm1","/dev/libnvm2","/dev/libnvm4","/dev/libnvm3","/dev/libnvm0"};
+  const char *const ctrls_paths[5] = {"/dev/libnvm0","/dev/libnvm1","/dev/libnvm2","/dev/libnvm3","/dev/libnvm4"};
+
+  cudaStream_t stream_array[8];
+  float* h_buf_ptr;
+  float* d_buf_ptr;
 
   uint32_t cudaDevice = 0;
   uint64_t cudaDeviceId = 0;
@@ -71,12 +75,24 @@ struct BAM_Feature_Store {
   void print();
   int add(int a, int b);
   void init_controllers(int ps, uint64_t r_off, uint64_t num_ele, uint64_t cache_size,uint64_t num_ssd, bool cpu_cache, uint64_t cpu_cache_ptr);
+  void mgc_init_controllers(int ps, uint64_t r_off, uint64_t num_ele, uint64_t cache_size,uint64_t ctrl_idx, bool cpu_cache, uint64_t cpu_cache_ptr);
+
   void read_feature_test();
   void read_feature(uint64_t tensor_ptr, uint64_t index_ptr,int64_t num_index, int dim, int cache_dim);
   void print_stats();
   void pin_memory(uint64_t i_index_ptr, int64_t num_pin_page, int dim);	
   void set_prefetching(uint64_t id_idx, uint64_t prefetch_idx, int64_t num_pages);
   void set_window_buffering(uint64_t id_idx, uint64_t prefetch_idx, int64_t num_pages); 
+
+
+  //multi-GPU
+  void init_backing_memory(size_t memory_size);
+  void fetch_from_backing_memory(uint64_t i_device_ptr, uint64_t i_batch_idx_ptr, uint64_t i_backing_idx_ptr,  int batch_size, int cl_size, int num_tranfer_cl);
+  void fetch_from_backing_memory_chunk(uint64_t i_device_ptr, uint64_t cl_size, int stream_id);
+  void create_streams(int num_streams);
+  void sync_streams(int num_streams);
+  void compute_test(uint64_t i_ptr, int num_idx);
+//  void fetch_from_backing_memory();
 };
 
 #endif
