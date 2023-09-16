@@ -4,9 +4,28 @@
 #define TYPE float
 
 struct BAM_Feature_Store {
-  const char *const ctrls_paths[5] = {"/dev/libnvm0","/dev/libnvm1","/dev/libnvm2","/dev/libnvm3","/dev/libnvm4"};
+  const char *const ctrls_paths[5] = {"/dev/libnvm1","/dev/libnvm0","/dev/libnvm2","/dev/libnvm3","/dev/libnvm4"};
 
   cudaStream_t stream_array[8];
+  cudaStream_t transfer_stream;
+  cudaStream_t transfer_stream2;
+  cudaStream_t wb_stream;
+  cudaStream_t fill_stream;
+  int dim;
+  bool cpu_agg_flag;
+  uint64_t total_access;
+  uint64_t prefetch_count;
+  uint64_t memcpy_count;
+  uint64_t overlap;
+
+  uint32_t cpu_agg_queue_depth;
+  TYPE* cpu_agg_buffer;
+  TYPE* d_agg_buffer;
+  uint64_t* d_agg_loc; 
+
+  uint32_t** d_batch_array_ptr;
+
+
   float* h_buf_ptr;
   float* d_buf_ptr;
 
@@ -34,24 +53,40 @@ struct BAM_Feature_Store {
   uint32_t devfn = 0;
 
   uint32_t n_ctrls = 1;
-  size_t blkSize = 64;
+  size_t blkSize = 128;
   size_t queueDepth = 1024;
   size_t numQueues = 128;
   size_t pageSize = 4096 ;
   uint64_t numElems = 300LL*1000*1000*1024;
-  // std::string name;
 
   uint64_t read_offset = 0;
   std::vector<Controller *> ctrls;
   page_cache_t *h_pc;
   range_t<TYPE> *h_range;
 
-//  page_cache_t *d_pc;
- // range_t<TYPE> *d_range;
+  //wb
+  uint32_t* transfer_count_ptr;
+  uint32_t* memcpy_count_ptr;
 
+  uint32_t wb_depth = 4;
+  uint32_t wb_queue_depth =  128 * 1024;
+  //uint32_t wb_queue_depth = 64;
+  
+  TYPE* wb_queue_ptr;
+  TYPE* host_wb_queue_ptr;
+  TYPE* cpu_agg_ptr;
+  uint32_t* wb_queue_counter;
+
+  uint64_t* h_wb_id_array;
+  uint64_t* wb_id_array;
+        
+  uint8_t time_step;
+  int32_t head_ptr;
+  
   std::vector<range_t<TYPE> *> vr;
-  //std::vector<array_t<TYPE>> a_vec;
   array_t<TYPE> *a;
+  range_d_t<TYPE> *d_range;
+
   BAM_Feature_Store()  {
   };
 
@@ -70,11 +105,23 @@ struct BAM_Feature_Store {
   // nvmNamespace, uint32_t cudaDevice, uint64_t queueDepth, uint64_t numQueues,
   // int num_controllers, std::vector<Controller*> &ctrls_vec);
 
- 
+ uint16_t reset_counter = 0;
+uint64_t* host_meta;
+uint64_t* device_meta;
+
+
   float kernel_time = 0; 
+  float fill_batch_time = 0;
+  float set_wb_time = 0;
+  float flush_time = 0; 
+
+  int low_priority;
+  int high_priority;
+
   void print();
   int add(int a, int b);
-  void init_controllers(int ps, uint64_t r_off, uint64_t num_ele, uint64_t cache_size,uint64_t num_ssd, bool cpu_cache, uint64_t cpu_cache_ptr);
+
+  void init_controllers(int ps, uint64_t r_off, uint64_t num_ele, uint64_t cache_size,uint64_t num_ssd, uint32_t wb_size, uint64_t q_size, bool f, int32_t cpu_agg_q_depth);
   void mgc_init_controllers(int ps, uint64_t r_off, uint64_t num_ele, uint64_t cache_size,uint64_t ctrl_idx, bool cpu_cache, uint64_t cpu_cache_ptr);
 
   void read_feature_test();
@@ -91,7 +138,22 @@ struct BAM_Feature_Store {
   void fetch_from_backing_memory_chunk(uint64_t i_device_ptr, uint64_t cl_size, int stream_id);
   void create_streams(int num_streams);
   void sync_streams(int num_streams);
-  void compute_test(uint64_t i_ptr, int num_idx);
+
+  void set_wb_counter(uint64_t batch_array_idx, uint64_t batch_size_idx, uint32_t max_size);
+  void read_feature_with_wb (uint64_t i_ptr, uint64_t i_index_ptr, uint64_t i_node_flag_ptr, uint64_t i_node_ptr, int64_t num_index, int dim, int cache_dim);
+  void prefetch_from_victim_queue(uint64_t i_feature_ptr, uint64_t i_node_id_ptr, int stream_id);
+  void fill_batch(uint64_t i_feature_ptr, uint64_t i_node_id_ptr, uint64_t i_batch_ptr, uint64_t i_batch_node_ptr, uint64_t node_flag_ptr, int batch_size, int dim, bool first);
+
+
+void set_wb_counter_list(uint64_t batch_array_idx, uint64_t batch_size_idx, uint32_t max_batch_size);
+void set_wb_counter_with_CPU(uint64_t batch_array_idx, uint64_t batch_size_idx, uint32_t max_size);
+void init_cpu_meta(uint64_t num_cl);
+
+
+void cpu_aggregate(uint64_t dim);
+
+  void print_wb_queue();
+  void update_time();
 //  void fetch_from_backing_memory();
 };
 
