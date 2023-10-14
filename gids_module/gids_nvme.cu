@@ -9,264 +9,232 @@
 #include <string>
 #include <vector>
 
-#include <buffer.h>
-#include <cuda.h>
-#include <fcntl.h>
-#include <nvm_admin.h>
-#include <nvm_cmd.h>
-#include <nvm_ctrl.h>
-#include <nvm_error.h>
-#include <nvm_io.h>
-#include <nvm_parallel_queue.h>
-#include <nvm_queue.h>
-#include <nvm_types.h>
-#include <nvm_util.h>
-#include <stdio.h>
-#include <sys/mman.h>
-#include <unistd.h>
-#include <util.h>
 
-#include <ctrl.h>
-#include <event.h>
-#include <page_cache.h>
-#include <queue.h>
 #include <stdio.h>
 #include <vector>
 
 #include <bam_nvme.h>
+#include <pybind11/stl.h>
+#include "gids_kernel.cu"
 //#include <bafs_ptr.h>
 
+typedef std::chrono::high_resolution_clock Clock;
 
+void GIDS_Controllers::init_GIDS_controllers(uint32_t num_ctrls, uint64_t q_depth, uint64_t num_q, 
+                          const std::vector<int>& ssd_list){
 
-template <typename T = float>
-__global__ void read_feature_kernel(array_d_t<T> *dr, T *out_tensor_ptr,
-                                    int64_t *index_ptr, int dim,
-                                    int64_t num_idx, int cache_dim) {
- uint64_t bid = blockIdx.x;
-  int num_warps = blockDim.x / 32;
-  int warp_id = threadIdx.x / 32;
-  int idx_idx = bid * num_warps + warp_id;
-  if (idx_idx < num_idx) {
- 	    bam_ptr<T> ptr(dr);
+  n_ctrls = num_ctrls;
+  queueDepth = q_depth;
+  numQueues = num_q;
 
-       	  uint64_t row_index = index_ptr[idx_idx];
-      	uint64_t tid = threadIdx.x % 32;
-
-
-    for (; tid < dim; tid += 32) {
-	    T temp = ptr[(row_index) * cache_dim + tid];
-	    out_tensor_ptr[(bid * num_warps + warp_id) * dim + tid] = temp;
-    }
-  }
-
-}
-
-
-template <typename T = float>
-__global__
-void set_prefetching_kernel(array_d_t<T>* dr, uint64_t *index_ptr, uint8_t* p_val_ptr, uint64_t page_size){
-	bam_ptr<T> ptr(dr);
-	if(threadIdx.x == 0){
-		uint64_t page_idx = index_ptr[blockIdx.x];
-		uint8_t p_val = p_val_ptr[blockIdx.x];
-		ptr.set_prefetch_val(page_idx * page_size/sizeof(T), p_val);
-	}
-}
-
-template <typename T = float>
-__global__
-void set_window_buffering_kernel(array_d_t<T>* dr, uint64_t *index_ptr, uint8_t* p_val_ptr, uint64_t page_size){
-	bam_ptr<T> ptr(dr);
-	if(threadIdx.x == 0){
-		uint64_t page_idx = index_ptr[blockIdx.x];
-		uint8_t p_val = p_val_ptr[blockIdx.x];
-		ptr.set_window_buffer_counter(page_idx * page_size/sizeof(T), p_val);
-	}
-}
-
-
-
-template <typename T = float>
-__global__ void bam_pin_cache(array_d_t<T>* dr, int64_t *index_ptr, int dim,int64_t num_idx, uint64_t page_size){
-	
-	bam_ptr<T> ptr(dr);
-	int64_t page_index = index_ptr[blockIdx.x];
-	uint64_t pin_idx = page_index * page_size / sizeof(T) + threadIdx.x;
-	dr -> pin_memory(pin_idx);
-}
-
-
-
-
-template <typename T = uint64_t>
-__global__ void sequential_access_kernel(array_d_t<T> *dr, uint64_t n_reqs,
-                                         unsigned long long *req_count,
-                                         uint64_t reqs_per_thread) {
-
-  uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
-
-  if (tid < n_reqs) {
-    for (size_t i = 0; i < reqs_per_thread; i++)
-      req_count += (uint64_t)(*dr)[(tid)];
-
-    T test = (*dr)[(tid)];
-    float *f_ptr = (float *)(&test);
-
-    // printf("tid: %i f1:%f \n", tid, test);
+  for (size_t i = 0; i < n_ctrls; i++) {
+    ctrls.push_back(new Controller(ctrls_paths[ssd_list[i]], nvmNamespace, cudaDevice, queueDepth, numQueues));
   }
 }
 
-// void BAM_Feature_Store::init_controllers(const char *const ctrls_paths[]) {
-void BAM_Feature_Store::init_controllers(int ps, uint64_t read_off, uint64_t cache_size, uint64_t num_ele = 100, uint64_t num_ssd = 1, bool cpu_cache = false, uint64_t cpu_page_num = 0) {
 
-  printf("init starts\n");
+template <typename TYPE>
+void BAM_Feature_Store<TYPE>::cpu_backing_buffer(uint64_t dim, uint64_t len){
+  TYPE* cpu_buffer_ptr;
+  TYPE* d_cpu_buffer_ptr;
+
+  cuda_err_chk(cudaHostAlloc((TYPE **)&cpu_buffer_ptr, sizeof(TYPE) * dim * len, cudaHostAllocMapped));
+  cudaHostGetDevicePointer((TYPE **)&d_cpu_buffer_ptr, (TYPE *)cpu_buffer_ptr, 0);
+
+  CPU_buffer.cpu_buffer_dim = dim;
+  CPU_buffer.cpu_buffer_len = len;
+  CPU_buffer.cpu_buffer = cpu_buffer_ptr;
+  CPU_buffer.device_cpu_buffer = d_cpu_buffer_ptr;
+  cpu_buffer_flag = true;
+}
+
+template <typename TYPE>
+void BAM_Feature_Store<TYPE>::init_controllers(GIDS_Controllers GIDS_ctrl, uint32_t ps, uint64_t read_off, uint64_t cache_size, uint64_t num_ele, uint64_t num_ssd = 1) {
+
   numElems = num_ele;
   read_offset = read_off;
   n_ctrls = num_ssd;
+  this -> pageSize = ps;
+  this -> dim = ps / sizeof(TYPE);
+  this -> total_access = 0; 
 
-  for (size_t i = 0; i < num_ssd; i++) {
-    ctrls.push_back(new Controller(ctrls_paths[i], nvmNamespace, cudaDevice,
-                                   queueDepth, numQueues));
-  }
-  printf("controllers are initalized\n");
-  uint64_t b_size = blkSize;
-  uint64_t g_size = (numThreads + b_size - 1) / b_size;
-  // uint64_t g_size = (numThreads) / b_size;
-  uint64_t n_threads = b_size * g_size;
+  ctrls = GIDS_ctrl.ctrls;
 
-  pageSize = ps;
+
   uint64_t page_size = pageSize;
-  uint64_t n_pages = numPages;
-  n_pages = cache_size * 1024LL*1024*1024/page_size;
-//  n_pages = 10;
-  uint64_t total_cache_size = (page_size * n_pages);
+  uint64_t n_pages = cache_size * 1024LL*1024/page_size;
+  this -> numPages = n_pages;
 
-  std::cout << "n pages: " << n_pages <<std::endl;
-  std::cout << "page size: " << pageSize << std::endl;
-  std::cout << "num elements: " << numElems << std::endl;
+  std::cout << "n pages: " << (int)(this->numPages) <<std::endl;
+  std::cout << "page size: " << (int)(this->pageSize) << std::endl;
+  std::cout << "num elements: " << this->numElems << std::endl;
 
-  h_pc = new page_cache_t(page_size, n_pages, cudaDevice, ctrls[0][0],
-                          (uint64_t)64, ctrls);
-
-
+  this -> h_pc = new page_cache_t(page_size, n_pages, cudaDevice, ctrls[0][0],(uint64_t)64, ctrls);
   page_cache_t *d_pc = (page_cache_t *)(h_pc->d_pc_ptr);
   uint64_t t_size = numElems * sizeof(TYPE);
 
-  // error
-  /*
-  range_t<TYPE> h_range2((uint64_t)0, (uint64_t)numElems, (uint64_t)0,
-                        (uint64_t)(t_size / page_size), (uint64_t)0,
-                        (uint64_t)page_size, h_pc, cudaDevice);
-*/
-  printf("create h_range\n");
-  std::cout << "numElems: " << numElems << std::endl;
-  printf("numElems: %llu t_size:%llu page_size: %llu\n",(uint64_t)numElems,(uint64_t)(t_size),  (uint64_t)page_size);
-  h_range = new range_t<TYPE>((uint64_t)0, (uint64_t)numElems, (uint64_t)read_off,
+  this -> h_range = new range_t<TYPE>((uint64_t)0, (uint64_t)numElems, (uint64_t)read_off,
                               (uint64_t)(t_size / page_size), (uint64_t)0,
-                              (uint64_t)page_size, h_pc, cudaDevice);
+                              (uint64_t)page_size, h_pc, cudaDevice, 
+			      REPLICATE
+			      //STRIPE
+			      );
 
-  // h_range = std::move(h_range2);
+  
+  this -> d_range = (range_d_t<TYPE> *)h_range->d_range_ptr;
 
-  printf("h rnage created\n");
-  range_t<TYPE> *d_range = (range_t<TYPE> *)h_range->d_range_ptr;
+  this -> vr.push_back(nullptr);
+  this -> vr[0] = h_range;
+  this -> a = new array_t<TYPE>(numElems, 0, vr, cudaDevice);
 
-  // std::vector<range_t<TYPE>*> vr(1);
-  vr.push_back(nullptr);
-  vr[0] = h_range;
+  cudaMalloc(&d_cpu_access, sizeof(unsigned int));
+  cudaMemset(d_cpu_access, 0 , sizeof(unsigned));
 
-  /*
-  array_t<TYPE> a2(numElems, 0, vr, cudaDevice);
-  a = std::move(a2);
-*/
-  printf("array_t crate\n");
-//  size_t cpu_cache_size = cpu_page_num * page_size;
-   a = new array_t<TYPE>(numElems, 0, vr, cudaDevice);
-
-
-  printf("init done\n");
-
+ 
   return;
 }
 
-void  BAM_Feature_Store::set_prefetching(uint64_t id_idx, uint64_t prefetch_idx, int64_t num_pages){
+
+
+
+
+
+
+template <typename TYPE>
+void  BAM_Feature_Store<TYPE>::set_window_buffering(uint64_t id_idx,  int64_t num_pages){
 	 uint64_t* idx_ptr = (uint64_t*) id_idx;
-	 uint8_t* prefetch_ptr = (uint8_t*) prefetch_idx;
 	 uint64_t page_size = pageSize;
-	 set_prefetching_kernel<TYPE><<<num_pages, 32>>>(a->d_array_ptr,idx_ptr, prefetch_ptr, page_size);
+	 set_window_buffering_kernel<TYPE><<<num_pages, 32>>>(a->d_array_ptr,idx_ptr, page_size);
 	 cuda_err_chk(cudaDeviceSynchronize())
 }
 
-void  BAM_Feature_Store::set_window_buffering(uint64_t id_idx, uint64_t prefetch_idx, int64_t num_pages){
-	 uint64_t* idx_ptr = (uint64_t*) id_idx;
-	 uint8_t* prefetch_ptr = (uint8_t*) prefetch_idx;
-	 uint64_t page_size = pageSize;
-	 set_window_buffering_kernel<TYPE><<<num_pages, 32>>>(a->d_array_ptr,idx_ptr, prefetch_ptr, page_size);
-	 cuda_err_chk(cudaDeviceSynchronize())
-}
 
-
-
-void BAM_Feature_Store::print_stats(){
+template <typename TYPE>
+void BAM_Feature_Store<TYPE>::print_stats_no_ctrl(){
   std::cout << "print stats: ";
-  h_pc->print_reset_stats();
+  this->h_pc->print_reset_stats();
   std::cout << std::endl;
 
   std::cout << "print array reset: ";
-  a->print_reset_stats();
+  this->a->print_reset_stats();
+  std::cout << std::endl;
+}
+
+
+template <typename TYPE>
+void BAM_Feature_Store<TYPE>::print_stats(){
+  std::cout << "print stats: ";
+  this->h_pc->print_reset_stats();
+  std::cout << std::endl;
+
+  std::cout << "print array reset: ";
+  this->a->print_reset_stats();
   std::cout << std::endl;
 
   for(int i = 0; i < n_ctrls; i++){
  	std::cout << "print ctrl reset " << i << ": ";
-  	(ctrls[i])->print_reset_stats();
+  	(this->ctrls[i])->print_reset_stats();
   	std::cout << std::endl;
 
   }
  
-  std::cout << "Kernel Time: \t " << kernel_time << std::endl;
-  kernel_time = 0;
-
+  std::cout << "Kernel Time: \t " << this->kernel_time << std::endl;
+  this->kernel_time = 0;
+  std::cout << "Total Access: \t " << this->total_access << std::endl;
+  this->total_access = 0;
 }
 
 
-void BAM_Feature_Store::pin_memory(uint64_t i_index_ptr, int64_t num_pin_page, int dim){
 
 
-  int64_t* index_ptr = (int64_t*) i_index_ptr;
-  uint64_t page_size = pageSize;
-
-  std::cout << "Pinning Pages\n";
-
-  bam_pin_cache<TYPE><<<num_pin_page,32>>>(a->d_array_ptr, index_ptr, dim, num_pin_page, page_size);
-  cuda_err_chk(cudaDeviceSynchronize());
-}
 
 
-void BAM_Feature_Store::read_feature(uint64_t i_ptr, uint64_t i_index_ptr,
+
+template <typename TYPE>
+void BAM_Feature_Store<TYPE>::read_feature(uint64_t i_ptr, uint64_t i_index_ptr,
                                      int64_t num_index, int dim, int cache_dim=1024) {
-
-  typedef std::chrono::high_resolution_clock Clock;
-
 
 
   TYPE *tensor_ptr = (TYPE *)i_ptr;
   int64_t *index_ptr = (int64_t *)i_index_ptr;
 
   uint64_t b_size = blkSize;
-  b_size=32;
   uint64_t n_warp = b_size / 32;
-  //  uint64_t g_size = (num_index + n_warp - 1) / n_warp;
   uint64_t g_size = (num_index+n_warp - 1) / n_warp;
- // g_size = 1;
-  //`printf("g size: %llu\n", g_size);
-
-  //printf("dim: %i\n", dim);
- // printf("num idx: %lli\n", num_index);
-
-  auto t1 = Clock::now();
-  read_feature_kernel<TYPE><<<g_size, b_size>>>(a->d_array_ptr, tensor_ptr,
-                                                 index_ptr, dim, num_index, cache_dim);
 
   cuda_err_chk(cudaDeviceSynchronize());
+  auto t1 = Clock::now();
+  if(cpu_buffer_flag == false){
+    read_feature_kernel<TYPE><<<g_size, b_size>>>(a->d_array_ptr, tensor_ptr,
+                                                  index_ptr, dim, num_index, cache_dim);
+  }
+  else{
+    read_feature_kernel_with_cpu_backing_memory<<<g_size, b_size>>>(a->d_array_ptr, d_range, tensor_ptr,
+                                                  index_ptr, dim, num_index, cache_dim, CPU_buffer, seq_flag,
+                                                  d_cpu_access);
+  }
+  cuda_err_chk(cudaDeviceSynchronize());
+  cudaMemcpy(&cpu_access_count, d_cpu_access, sizeof(unsigned int), cudaMemcpyDeviceToHost);
+  auto t2 = Clock::now();
+  auto us = std::chrono::duration_cast<std::chrono::microseconds>(
+      t2 - t1); // Microsecond (as int)
+  auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+      t2 - t1); // Microsecond (as int)
+  const float ms_fractional =
+      static_cast<float>(us.count()) / 1000; // Milliseconds (as float)
+
+  //std::cout << "Duration = " << us.count() << "µs (" << ms_fractional << "ms)"
+    //        << std::endl;
+ 
+  kernel_time += ms_fractional;
+  total_access += num_index;
+
+  return;
+}
+
+
+template <typename TYPE>
+void BAM_Feature_Store<TYPE>::read_feature_merged(int num_iter, const std::vector<uint64_t>&  i_ptr_list, const std::vector<uint64_t>&  i_index_ptr_list,
+                                     const std::vector<uint64_t>&   num_index, int dim, int cache_dim=1024) {
+
+  cudaStream_t streams[num_iter];
+  for (int i = 0; i < num_iter; i++) {
+      cudaStreamCreate(&streams[i]);
+  }
+
+  cuda_err_chk(cudaDeviceSynchronize());
+  auto t1 = Clock::now();
+
+  for(uint64_t i = 0;  i < num_iter; i++){
+    uint64_t i_ptr = i_ptr_list[i];
+    uint64_t    i_index_ptr =  i_index_ptr_list[i];         
+    TYPE *tensor_ptr = (TYPE *) i_ptr;
+    int64_t *index_ptr = (int64_t *)i_index_ptr;
+
+    uint64_t b_size = blkSize;
+    uint64_t n_warp = b_size / 32;
+    uint64_t g_size = (num_index[i]+n_warp - 1) / n_warp;
+    
+
+    if(cpu_buffer_flag == false){
+      read_feature_kernel<TYPE><<<g_size, b_size, 0, streams[i] >>>(a->d_array_ptr, tensor_ptr,
+                                                    index_ptr, dim, num_index[i], cache_dim);
+    }
+    else{
+      read_feature_kernel_with_cpu_backing_memory<<<g_size, b_size, 0, streams[i] >>>(a->d_array_ptr, d_range ,tensor_ptr,
+                                                    index_ptr, dim, num_index[i], cache_dim, CPU_buffer, seq_flag, 
+                                                    d_cpu_access);
+    }
+    total_access += num_index[i];
+  }
+
+  for (int i = 0; i < num_iter; i++) {
+    cudaStreamSynchronize(streams[i]);
+  }
+
+  cuda_err_chk(cudaDeviceSynchronize());
+  cuda_err_chk(cudaDeviceSynchronize());
+  cudaMemcpy(&cpu_access_count, d_cpu_access, sizeof(unsigned int), cudaMemcpyDeviceToHost);
 
   auto t2 = Clock::now();
   auto us = std::chrono::duration_cast<std::chrono::microseconds>(
@@ -280,7 +248,110 @@ void BAM_Feature_Store::read_feature(uint64_t i_ptr, uint64_t i_index_ptr,
     //        << std::endl;
  
   kernel_time += ms_fractional;
+
+  for (int i = 0; i < num_iter; i++) {
+      cudaStreamDestroy(streams[i]);
+  }
   return;
+}
+
+
+
+
+
+
+
+
+
+
+
+template <typename TYPE>
+void  BAM_Feature_Store<TYPE>::store_tensor(uint64_t tensor_ptr, uint64_t num, uint64_t offset){
+
+  TYPE* t_ptr = (TYPE*) tensor_ptr;
+  
+  page_cache_d_t* d_pc = (page_cache_d_t*) (h_pc -> d_pc_ptr);
+
+  size_t g_size = (num + 1023)/1024;
+  printf("g size: %i num: %llu\n", g_size, num);
+  write_feature_kernel<TYPE><<<g_size, 1024>>>(h_pc->pdt.d_ctrls, d_pc, a->d_array_ptr, t_ptr, 4096, offset);
+  cuda_err_chk(cudaDeviceSynchronize());
+  printf("CALLLING FLUSH\n");
+  h_pc->flush_cache();
+  cuda_err_chk(cudaDeviceSynchronize());
+
+}
+
+
+template <typename TYPE>
+void  BAM_Feature_Store<TYPE>::flush_cache(){
+  h_pc->flush_cache();
+  cuda_err_chk(cudaDeviceSynchronize());
+}
+
+
+
+template <typename TYPE>
+void  BAM_Feature_Store<TYPE>::set_cpu_buffer(uint64_t idx_buffer, int num){
+
+  int bsize = 1024;
+  int grid = (num + bsize - 1) / bsize;
+  uint64_t* idx_ptr = (uint64_t* ) idx_buffer;
+  set_cpu_buffer_kernel<TYPE><<<grid,bsize>>>(d_range, idx_ptr, num, pageSize);
+  cuda_err_chk(cudaDeviceSynchronize());
+  seq_flag = false;
+
+
+}
+
+
+
+template <typename TYPE>
+void  BAM_Feature_Store<TYPE>::set_offsets(uint64_t in_off, uint64_t index_off, uint64_t data_off){
+
+ offset_array = new uint64_t[3];
+    printf("set offset: in_off: %llu index_off: %llu data_off: %llu offset_ptr:%llu\n", in_off, index_off, data_off, (uint64_t) offset_array);
+
+  offset_array[0] = (in_off);
+  offset_array[1] = (index_off);
+  offset_array[2] = (data_off);
+
+}
+
+
+template <typename TYPE>
+uint64_t BAM_Feature_Store<TYPE>::get_offset_array(){
+  return ((uint64_t) offset_array);
+}
+
+template <typename TYPE>
+uint64_t BAM_Feature_Store<TYPE>::get_array_ptr(){
+	return ((uint64_t) (a->d_array_ptr));
+}
+
+
+template <typename TYPE>
+void  BAM_Feature_Store<TYPE>::read_tensor(uint64_t num, uint64_t offset){
+  read_kernel<TYPE><<<1, 1>>>(a->d_array_ptr, num, offset);
+  cuda_err_chk(cudaDeviceSynchronize());
+
+}
+
+
+template <typename TYPE>
+unsigned int BAM_Feature_Store<TYPE>::get_cpu_access_count(){
+	return cpu_access_count;
+}
+
+template <typename TYPE>
+void BAM_Feature_Store<TYPE>::flush_cpu_access_count(){
+	cpu_access_count = 0;
+  cudaMemset(d_cpu_access, 0 , sizeof(unsigned));
+}
+
+template <typename T>
+BAM_Feature_Store<T> create_BAM_Feature_Store() {
+    return BAM_Feature_Store<T>();
 }
 
 PYBIND11_MODULE(BAM_Feature_Store, m) {
@@ -288,16 +359,61 @@ PYBIND11_MODULE(BAM_Feature_Store, m) {
 
   namespace py = pybind11;
 
-  py::class_<BAM_Feature_Store,
-             std::unique_ptr<BAM_Feature_Store, py::nodelete>>(
-      m, "BAM_Feature_Store")
-      .def(py::init([]() { return new BAM_Feature_Store(); }))
-      .def("init_controllers", &BAM_Feature_Store::init_controllers)
-      .def("print_stats", &BAM_Feature_Store::print_stats)
-      .def("read_feature", &BAM_Feature_Store::read_feature)
-      .def("pin_pages", &BAM_Feature_Store::pin_memory)
-      .def("set_prefetching", &BAM_Feature_Store::set_prefetching)
-      .def("set_window_buffering", &BAM_Feature_Store::set_window_buffering);
+  //py::class_<BAM_Feature_Store<>, std::unique_ptr<BAM_Feature_Store<float>, py::nodelete>>(m, "BAM_Feature_Store")
+    py::class_<BAM_Feature_Store<float>>(m, "BAM_Feature_Store_float")
+      .def(py::init<>())
+      .def("init_controllers", &BAM_Feature_Store<float>::init_controllers)
+      .def("read_feature", &BAM_Feature_Store<float>::read_feature)
+      .def("read_feature_merged", &BAM_Feature_Store<float>::read_feature_merged)
+      .def("set_window_buffering", &BAM_Feature_Store<float>::set_window_buffering)
+      .def("cpu_backing_buffer", &BAM_Feature_Store<float>::cpu_backing_buffer)
+      .def("set_cpu_buffer", &BAM_Feature_Store<float>::set_cpu_buffer)
+
+      .def("flush_cache", &BAM_Feature_Store<float>::flush_cache)
+      .def("store_tensor",  &BAM_Feature_Store<float>::store_tensor)
+      .def("read_tensor",  &BAM_Feature_Store<float>::read_tensor)
+
+      .def("get_array_ptr", &BAM_Feature_Store<float>::get_array_ptr)
+      .def("get_offset_array", &BAM_Feature_Store<float>::get_offset_array)
+      .def("set_offsets", &BAM_Feature_Store<float>::set_offsets)
+      .def("get_cpu_access_count", &BAM_Feature_Store<float>::get_cpu_access_count)
+      .def("flush_cpu_access_count", &BAM_Feature_Store<float>::flush_cpu_access_count)
+
+      .def("print_stats", &BAM_Feature_Store<float>::print_stats);
+
+
+
+    py::class_<BAM_Feature_Store<int64_t>>(m, "BAM_Feature_Store_long")
+      .def(py::init<>())
+      .def("init_controllers", &BAM_Feature_Store<int64_t>::init_controllers)
+      .def("read_feature", &BAM_Feature_Store<int64_t>::read_feature)
+      .def("read_feature_merged", &BAM_Feature_Store<int64_t>::read_feature_merged)
+      .def("set_window_buffering", &BAM_Feature_Store<int64_t>::set_window_buffering)
+      .def("cpu_backing_buffer", &BAM_Feature_Store<int64_t>::cpu_backing_buffer)
+      .def("set_cpu_buffer", &BAM_Feature_Store<int64_t>::set_cpu_buffer)
+
+      .def("flush_cache", &BAM_Feature_Store<int64_t>::flush_cache)
+      .def("store_tensor",  &BAM_Feature_Store<int64_t>::store_tensor)
+      .def("read_tensor",  &BAM_Feature_Store<int64_t>::read_tensor)
+
+      .def("get_array_ptr", &BAM_Feature_Store<int64_t>::get_array_ptr)
+      .def("get_offset_array", &BAM_Feature_Store<int64_t>::get_offset_array)
+      .def("set_offsets", &BAM_Feature_Store<int64_t>::set_offsets)
+      .def("get_cpu_access_count", &BAM_Feature_Store<int64_t>::get_cpu_access_count)
+      .def("flush_cpu_access_count", &BAM_Feature_Store<int64_t>::flush_cpu_access_count)
+
+
+      .def("print_stats", &BAM_Feature_Store<int64_t>::print_stats);
+
+
+
+
+      py::class_<GIDS_Controllers>(m, "GIDS_Controllers")
+      .def(py::init<>())
+      .def("init_GIDS_controllers", &GIDS_Controllers::init_GIDS_controllers);
+
 }
+
+//gids
 
 

@@ -66,8 +66,9 @@ target_compile_options(BAM_Feature_Store PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
 			-std=c++11;
 					-O3;
 
-			#			-G;
-			-g;
+					#				-G;
+					#		-g;
+			--default-stream per-thread;
 			#	--ptxas-options=-v;
 			#  	--compiler-options='-fPIC $(python3 -m pybind11 --includes)'
                       >)

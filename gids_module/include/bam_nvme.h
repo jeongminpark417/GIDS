@@ -1,82 +1,122 @@
 #ifndef BAMNVME_H
 #define BAMNVME_H
 
-#define TYPE float
+#include <buffer.h>
+#include <cuda.h>
+#include <fcntl.h>
+#include <nvm_admin.h>
+#include <nvm_cmd.h>
+#include <nvm_ctrl.h>
+#include <nvm_error.h>
+#include <nvm_io.h>
+#include <nvm_parallel_queue.h>
+#include <nvm_queue.h>
+#include <nvm_types.h>
+#include <nvm_util.h>
+#include <stdio.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <util.h>
 
-struct BAM_Feature_Store {
-  const char *const ctrls_paths[5] = {"/dev/libnvm1","/dev/libnvm2","/dev/libnvm4","/dev/libnvm3","/dev/libnvm0"};
+#include <ctrl.h>
+#include <event.h>
+#include <page_cache.h>
+#include <queue.h>
 
-  uint32_t cudaDevice = 0;
-  uint64_t cudaDeviceId = 0;
-//  const char *blockDevicePath = nullptr;
-//  const char *controllerPath = nullptr;
-  uint64_t controllerId = 0;
-  uint32_t adapter = 0;
-  uint32_t segmentId = 0;
-  uint32_t nvmNamespace = 1;
-  bool doubleBuffered = false;
-  size_t numReqs = 100;
-  size_t numPages = 262144 * 8   ;
-  // size_t numPages = 1024*100 ;
+//#define TYPE float
+struct GIDS_Controllers {
+  const char *const ctrls_paths[6] = {"/dev/libnvm1","/dev/libnvm2","/dev/libnvm3","/dev/libnvm4","/dev/libnvm5", "/dev/libnvm0"};
+  std::vector<Controller *> ctrls;
+
+  uint32_t n_ctrls = 1;
+  uint64_t queueDepth = 1024;
+  uint64_t numQueues = 128;
   
-  size_t startBlock = 0;
+  uint32_t cudaDevice = 0;
+  uint32_t nvmNamespace = 1;
+  
+  //member functions
+  void init_GIDS_controllers(uint32_t num_ctrls, uint64_t q_depth, uint64_t num_q,  const std::vector<int>& ssd_list);
+
+};
+
+template <typename TYPE>
+struct GIDS_CPU_buffer {
+    TYPE* cpu_buffer;
+    TYPE* device_cpu_buffer;
+    uint64_t cpu_buffer_dim;
+    uint64_t cpu_buffer_len;
+};
 
 
+template <typename TYPE>
+struct BAM_Feature_Store {
+
+
+  GIDS_CPU_buffer<TYPE> CPU_buffer;
+  //GIDS optimization flasg
+  bool cpu_buffer_flag = false;
+  bool seq_flag = true;
+  //Sampling Offsets
+  uint64_t* offset_array;
+
+  int dim;
+  uint64_t total_access;
+  unsigned int cpu_access_count = 0;
+  unsigned int* d_cpu_access;
+
+  //BAM parameters
+  uint32_t cudaDevice = 0;
+  size_t numPages = 262144 * 8;
   bool stats = false;
-//  const char *output = nullptr;
   size_t numThreads = 64;
   uint32_t domain = 0;
   uint32_t bus = 0;
   uint32_t devfn = 0;
 
   uint32_t n_ctrls = 1;
-  size_t blkSize = 64;
+  size_t blkSize = 128;
   size_t queueDepth = 1024;
   size_t numQueues = 128;
-  size_t pageSize = 4096 ;
+  uint32_t pageSize = 4096 ;
   uint64_t numElems = 300LL*1000*1000*1024;
-  // std::string name;
-
   uint64_t read_offset = 0;
   std::vector<Controller *> ctrls;
+
   page_cache_t *h_pc;
   range_t<TYPE> *h_range;
-
-//  page_cache_t *d_pc;
- // range_t<TYPE> *d_range;
-
   std::vector<range_t<TYPE> *> vr;
-  //std::vector<array_t<TYPE>> a_vec;
   array_t<TYPE> *a;
-  BAM_Feature_Store()  {
-  };
+  range_d_t<TYPE> *d_range;
+  //wb
 
-  ~BAM_Feature_Store(){
- 
-	  for(auto i : ctrls){
-	  	delete(i);
-	  }
-	  delete(h_pc);
-	  delete(h_range);
-	  delete(a);
-  }
-  // BAM_Feature_Store(const std::string &name)
-  //   : name(name) {}
-  // void init_controllers(const char* const ctrls_paths[], uint32_t
-  // nvmNamespace, uint32_t cudaDevice, uint64_t queueDepth, uint64_t numQueues,
-  // int num_controllers, std::vector<Controller*> &ctrls_vec);
-
- 
+  
   float kernel_time = 0; 
-  void print();
-  int add(int a, int b);
-  void init_controllers(int ps, uint64_t r_off, uint64_t num_ele, uint64_t cache_size,uint64_t num_ssd, bool cpu_cache, uint64_t cpu_cache_ptr);
-  void read_feature_test();
+
+
+  void init_controllers(GIDS_Controllers GIDS_ctrl, uint32_t ps, uint64_t r_off, uint64_t num_ele, uint64_t cache_size, 
+                        uint64_t num_ssd);
+
   void read_feature(uint64_t tensor_ptr, uint64_t index_ptr,int64_t num_index, int dim, int cache_dim);
+  void read_feature_merged(int num_iter, const std::vector<uint64_t>&  i_ptr_list, const std::vector<uint64_t>& i_index_ptr_list, const std::vector<uint64_t>&   num_index, int dim, int cache_dim);
+
+  void cpu_backing_buffer(uint64_t dim, uint64_t len);
+  void set_cpu_buffer(uint64_t idx_buffer, int num);  
+
+  void set_window_buffering(uint64_t id_idx,  int64_t num_pages); 
   void print_stats();
-  void pin_memory(uint64_t i_index_ptr, int64_t num_pin_page, int dim);	
-  void set_prefetching(uint64_t id_idx, uint64_t prefetch_idx, int64_t num_pages);
-  void set_window_buffering(uint64_t id_idx, uint64_t prefetch_idx, int64_t num_pages); 
+  void print_stats_no_ctrl();
+
+ 
+  uint64_t get_array_ptr();
+  uint64_t get_offset_array();
+  void set_offsets(uint64_t in_off, uint64_t index_off, uint64_t data_off);
+  void store_tensor(uint64_t tensor_ptr, uint64_t num, uint64_t offset);
+  void read_tensor( uint64_t num, uint64_t offset);
+  void flush_cache();
+  unsigned int get_cpu_access_count();
+  void flush_cpu_access_count();
+
 };
 
 #endif
