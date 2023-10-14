@@ -15,6 +15,7 @@ class GIDS():
         long_type=False, 
         heterograph=False):
 
+        #self.sample_type = "LADIES"
 
         if(long_type):
             self.BAM_FS = BAM_Feature_Store.BAM_Feature_Store_long()
@@ -90,7 +91,7 @@ class GIDS():
 
     # Window Buffering
     def window_buffering(self, batch):
-        
+        s_time = time.time()
         if(self.heterograph):    
              for key, value in batch[0].items():            
                 if(len(value) == 0):
@@ -128,7 +129,6 @@ class GIDS():
 
     #Fetching Data from the SSDs
     def fetch_feature(self, dim, it, device):
-
         GIDS_time_start = time.time()
 
         if(self.window_buffering_flag):
@@ -137,7 +137,10 @@ class GIDS():
                 self.fill_wb(it, self.wb_size)
                 self.wb_init = True
 
+        #print("Sample  start")
         next_batch = next(it)
+        #print("Sample  done")
+
         self.window_buffer.append(next_batch)
         #Update Counters for Windwo Buffering
         if(self.window_buffering_flag):
@@ -183,41 +186,26 @@ class GIDS():
                     if(current_access > (required_accesses )):
                         break
 
-
-
-                 batch = self.window_buffer.pop(0)
-                ret_ten = {}
-                for k , v in batch[0].items():
-                    if(len(v) == 0):
-                        empty_t = torch.empty((0, self.cache_dim)).to(self.gids_device)
-                        ret_ten[k] = empty_t
-                    else:
-                        g_index = v.to(self.gids_device)
-                        index_size = len(g_index)
-                        index_ptr = g_index.data_ptr()
-                        return_torch =  torch.zeros([index_size,dim], dtype=torch.float, device=self.gids_device)
-                        self.BAM_FS.read_feature(return_torch.data_ptr(), index_ptr, index_size, dim, self.cache_dim)
-                        ret_ten[k] = return_torch
-
-
+                num_concurrent_iter = 0
                 for i in range(num_iter):
                     batch = self.window_buffer[i]
                     ret_ten = {}
                     for k , v in batch[0].items():
                         if(len(v) == 0):
-                            empty_t = torch.empty((0, self.cache_dim)).to(self.gids_device)
+                            empty_t = torch.empty((0, dim)).to(self.gids_device)
                             ret_ten[k] = empty_t
                         else:
                             v = v.to(self.gids_device)
-                            index_size = len(g_index)
+                            index_size = len(v)
                             index_size_list.append(index_size)
                             return_torch =  torch.zeros([index_size,dim], dtype=torch.float, device=self.gids_device)
                             index_ptr_list.append(v.data_ptr())
                             ret_ten[k] = return_torch
                             return_torch_list.append(return_torch.data_ptr())
-                            self.return_torch_buffer.append(ret_ten)
+                            num_concurrent_iter += 1
+                    self.return_torch_buffer.append(ret_ten)
 
-                self.BAM_FS.read_feature_merged(num_iter, return_torch_list, index_ptr_list, index_size_list, dim, self.cache_dim)
+                self.BAM_FS.read_feature_merged(num_concurrent_iter, return_torch_list, index_ptr_list, index_size_list, dim, self.cache_dim)
                 return_ten = self.return_torch_buffer.pop(0)
                 return_batch = self.window_buffer.pop(0)
                 return_batch.append(return_ten)
@@ -273,7 +261,7 @@ class GIDS():
                 ret_ten = {}
                 for k , v in batch[0].items():
                     if(len(v) == 0):
-                        empty_t = torch.empty((0, self.cache_dim)).to(self.gids_device)
+                        empty_t = torch.empty((0, dim)).to(self.gids_device)
                         ret_ten[k] = empty_t
                     else:
                         g_index = v.to(self.gids_device)
@@ -281,7 +269,7 @@ class GIDS():
                         index_ptr = g_index.data_ptr()
                         return_torch =  torch.zeros([index_size,dim], dtype=torch.float, device=self.gids_device)
                         self.BAM_FS.read_feature(return_torch.data_ptr(), index_ptr, index_size, dim, self.cache_dim)
-                        ret_ten[k] = ret_t
+                        ret_ten[k] = return_torch
 
                 batch.append(ret_ten)
                 self.GIDS_time += time.time() - GIDS_time_start
@@ -289,14 +277,19 @@ class GIDS():
 
             else:
                 batch = self.window_buffer.pop(0)
+                print("batch: ", batch)
+                #print("batch 0: ", batch.ndata['_ID'])
                 index = batch[0].to(self.gids_device)
                 index_size = len(index)
+                print(batch[0])
+                print("index size: ", index_size)
                 index_ptr = index.data_ptr()
                 return_torch =  torch.zeros([index_size,dim], dtype=torch.float, device=self.gids_device)
                 self.BAM_FS.read_feature(return_torch.data_ptr(), index_ptr, index_size, dim, self.cache_dim)
+                self.GIDS_time += time.time() - GIDS_time_start
+
                 batch.append(return_torch)
 
-                self.GIDS_time += time.time() - GIDS_time_start
                 return batch
 
 
