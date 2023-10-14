@@ -23,7 +23,7 @@ pip install .
 ```
 Finally, users need to update the DGL dataloader by reinstalling the DGL library from the forked DGL repository.
 
-The scripts for the IGB, OGB, and MAG datasets are located in the example directory. 
+The scripts for the IGB, OGB, and MAG datasets are located in the evaluation directory. 
 
 
 ## Graph Strucute Data Type
