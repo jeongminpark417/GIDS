@@ -1,3 +1,0 @@
-/root/GIDS/gids_module/build/CMakeFiles/BAM_Feature_Store.dir
-/root/GIDS/gids_module/build/CMakeFiles/edit_cache.dir
-/root/GIDS/gids_module/build/CMakeFiles/rebuild_cache.dir
