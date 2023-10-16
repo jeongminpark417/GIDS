@@ -277,12 +277,10 @@ class GIDS():
 
             else:
                 batch = self.window_buffer.pop(0)
-                print("batch: ", batch)
                 #print("batch 0: ", batch.ndata['_ID'])
                 index = batch[0].to(self.gids_device)
                 index_size = len(index)
-                print(batch[0])
-                print("index size: ", index_size)
+                #print(batch[0])
                 index_ptr = index.data_ptr()
                 return_torch =  torch.zeros([index_size,dim], dtype=torch.float, device=self.gids_device)
                 self.BAM_FS.read_feature(return_torch.data_ptr(), index_ptr, index_size, dim, self.cache_dim)
