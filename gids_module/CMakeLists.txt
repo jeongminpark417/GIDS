@@ -38,16 +38,20 @@ FIND_PACKAGE( pybind11 REQUIRED )
 #   https://cmake.org/cmake/help/git-master/module/FindPython3.html
 #
 # for more information.
-FIND_PACKAGE(PythonInterp 3)
-FIND_PACKAGE(PythonLibs   3)
 
 
-IF( PYTHONINTERP_FOUND AND PYTHONLIBS_FOUND AND PYBIND11_FOUND )
+
+FIND_PACKAGE(PythonInterp 3 REQUIRED)
+FIND_PACKAGE(PythonLibs   3 REQUIRED)
+
+
+#IF( PYTHONINTERP_FOUND AND PYTHONLIBS_FOUND AND PYBIND11_FOUND )
   INCLUDE_DIRECTORIES(
     ${PYTHON_INCLUDE_DIRS}
     ${PYBIND11_INCLUDE_DIRS}
   )
-message(STATUS "foo include dir: ${CMAKE_CURRENT_SOURCE_DIR}")
+
+message("Compilation starts")
 
 ADD_LIBRARY(BAM_Feature_Store SHARED gids_nvme.cu )
  
@@ -89,4 +93,6 @@ target_compile_options(BAM_Feature_Store PRIVATE
   CONFIGURE_FILE( BAM_Feature_Store/setup.py
     ${CMAKE_CURRENT_BINARY_DIR}/BAM_Feature_Store/setup.py
   )
-ENDIF()
+
+#ENDIF()
+
