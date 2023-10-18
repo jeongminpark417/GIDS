@@ -101,10 +101,10 @@ void BAM_Feature_Store<TYPE>::init_controllers(GIDS_Controllers GIDS_ctrl, uint3
 
 
 template <typename TYPE>
-void  BAM_Feature_Store<TYPE>::set_window_buffering(uint64_t id_idx,  int64_t num_pages){
+void  BAM_Feature_Store<TYPE>::set_window_buffering(uint64_t id_idx,  int64_t num_pages, int hash_off = 0){
 	 uint64_t* idx_ptr = (uint64_t*) id_idx;
 	 uint64_t page_size = pageSize;
-	 set_window_buffering_kernel<TYPE><<<num_pages, 32>>>(a->d_array_ptr,idx_ptr, page_size);
+	 set_window_buffering_kernel<TYPE><<<num_pages, 32>>>(a->d_array_ptr,idx_ptr, page_size, hash_off);
 	 cuda_err_chk(cudaDeviceSynchronize())
 }
 
@@ -152,7 +152,7 @@ void BAM_Feature_Store<TYPE>::print_stats(){
 
 template <typename TYPE>
 void BAM_Feature_Store<TYPE>::read_feature(uint64_t i_ptr, uint64_t i_index_ptr,
-                                     int64_t num_index, int dim, int cache_dim=1024) {
+                                     int64_t num_index, int dim, int cache_dim, uint64_t key_off = 0) {
 
 
   TYPE *tensor_ptr = (TYPE *)i_ptr;
@@ -166,15 +166,71 @@ void BAM_Feature_Store<TYPE>::read_feature(uint64_t i_ptr, uint64_t i_index_ptr,
   auto t1 = Clock::now();
   if(cpu_buffer_flag == false){
     read_feature_kernel<TYPE><<<g_size, b_size>>>(a->d_array_ptr, tensor_ptr,
-                                                  index_ptr, dim, num_index, cache_dim);
+                                                  index_ptr, dim, num_index, cache_dim, key_off);
   }
   else{
     read_feature_kernel_with_cpu_backing_memory<<<g_size, b_size>>>(a->d_array_ptr, d_range, tensor_ptr,
                                                   index_ptr, dim, num_index, cache_dim, CPU_buffer, seq_flag,
-                                                  d_cpu_access);
+                                                  d_cpu_access, key_off);
   }
   cuda_err_chk(cudaDeviceSynchronize());
   cudaMemcpy(&cpu_access_count, d_cpu_access, sizeof(unsigned int), cudaMemcpyDeviceToHost);
+  auto t2 = Clock::now();
+  auto us = std::chrono::duration_cast<std::chrono::microseconds>(
+      t2 - t1); // Microsecond (as int)
+  auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+      t2 - t1); // Microsecond (as int)
+  const float ms_fractional =
+      static_cast<float>(us.count()) / 1000; // Milliseconds (as float)
+
+  kernel_time += ms_fractional;
+  total_access += num_index;
+
+  return;
+}
+
+template <typename TYPE>
+void BAM_Feature_Store<TYPE>::read_feature_hetero(int num_iter, const std::vector<uint64_t>&  i_ptr_list, const std::vector<uint64_t>&  i_index_ptr_list,
+                                     const std::vector<uint64_t>&   num_index, int dim, int cache_dim, const std::vector<uint64_t>& key_off) {
+
+  cudaStream_t streams[num_iter];
+  for (int i = 0; i < num_iter; i++) {
+      cudaStreamCreate(&streams[i]);
+  }
+
+  cuda_err_chk(cudaDeviceSynchronize());
+  auto t1 = Clock::now();
+
+  for(uint64_t i = 0;  i < num_iter; i++){
+    uint64_t i_ptr = i_ptr_list[i];
+    uint64_t    i_index_ptr =  i_index_ptr_list[i];         
+    TYPE *tensor_ptr = (TYPE *) i_ptr;
+    int64_t *index_ptr = (int64_t *)i_index_ptr;
+
+    uint64_t b_size = blkSize;
+    uint64_t n_warp = b_size / 32;
+    uint64_t g_size = (num_index[i]+n_warp - 1) / n_warp;
+
+    if(cpu_buffer_flag == false){
+      read_feature_kernel<TYPE><<<g_size, b_size, 0, streams[i] >>>(a->d_array_ptr, tensor_ptr,
+                                                    index_ptr, dim, num_index[i], cache_dim, key_off[i]);
+    }
+    else{
+      read_feature_kernel_with_cpu_backing_memory<<<g_size, b_size, 0, streams[i] >>>(a->d_array_ptr, d_range ,tensor_ptr,
+                                                    index_ptr, dim, num_index[i], cache_dim, CPU_buffer, seq_flag, 
+                                                    d_cpu_access,  key_off[i]);
+    }
+    total_access += num_index[i];
+  }
+
+  for (int i = 0; i < num_iter; i++) {
+    cudaStreamSynchronize(streams[i]);
+  }
+
+  cuda_err_chk(cudaDeviceSynchronize());
+  cuda_err_chk(cudaDeviceSynchronize());
+  cudaMemcpy(&cpu_access_count, d_cpu_access, sizeof(unsigned int), cudaMemcpyDeviceToHost);
+
   auto t2 = Clock::now();
   auto us = std::chrono::duration_cast<std::chrono::microseconds>(
       t2 - t1); // Microsecond (as int)
@@ -187,8 +243,10 @@ void BAM_Feature_Store<TYPE>::read_feature(uint64_t i_ptr, uint64_t i_index_ptr,
     //        << std::endl;
  
   kernel_time += ms_fractional;
-  total_access += num_index;
 
+  for (int i = 0; i < num_iter; i++) {
+      cudaStreamDestroy(streams[i]);
+  }
   return;
 }
 
@@ -218,12 +276,12 @@ void BAM_Feature_Store<TYPE>::read_feature_merged(int num_iter, const std::vecto
 
     if(cpu_buffer_flag == false){
       read_feature_kernel<TYPE><<<g_size, b_size, 0, streams[i] >>>(a->d_array_ptr, tensor_ptr,
-                                                    index_ptr, dim, num_index[i], cache_dim);
+                                                    index_ptr, dim, num_index[i], cache_dim, 0);
     }
     else{
       read_feature_kernel_with_cpu_backing_memory<<<g_size, b_size, 0, streams[i] >>>(a->d_array_ptr, d_range ,tensor_ptr,
                                                     index_ptr, dim, num_index[i], cache_dim, CPU_buffer, seq_flag, 
-                                                    d_cpu_access);
+                                                    d_cpu_access, 0);
     }
     total_access += num_index[i];
   }
@@ -258,6 +316,68 @@ void BAM_Feature_Store<TYPE>::read_feature_merged(int num_iter, const std::vecto
 
 
 
+
+template <typename TYPE>
+void BAM_Feature_Store<TYPE>::read_feature_merged_hetero(int num_iter, const std::vector<uint64_t>&  i_ptr_list, const std::vector<uint64_t>&  i_index_ptr_list,
+                                     const std::vector<uint64_t>&   num_index, int dim, int cache_dim, const std::vector<uint64_t>& key_off) {
+
+  cudaStream_t streams[num_iter];
+  for (int i = 0; i < num_iter; i++) {
+      cudaStreamCreate(&streams[i]);
+  }
+
+  cuda_err_chk(cudaDeviceSynchronize());
+  auto t1 = Clock::now();
+
+  for(uint64_t i = 0;  i < num_iter; i++){
+    uint64_t i_ptr = i_ptr_list[i];
+    uint64_t    i_index_ptr =  i_index_ptr_list[i];         
+    TYPE *tensor_ptr = (TYPE *) i_ptr;
+    int64_t *index_ptr = (int64_t *)i_index_ptr;
+
+    uint64_t b_size = blkSize;
+    uint64_t n_warp = b_size / 32;
+    uint64_t g_size = (num_index[i]+n_warp - 1) / n_warp;
+    
+
+    if(cpu_buffer_flag == false){
+      read_feature_kernel<TYPE><<<g_size, b_size, 0, streams[i] >>>(a->d_array_ptr, tensor_ptr,
+                                                    index_ptr, dim, num_index[i], cache_dim, key_off[i]);
+    }
+    else{
+      read_feature_kernel_with_cpu_backing_memory<<<g_size, b_size, 0, streams[i] >>>(a->d_array_ptr, d_range ,tensor_ptr,
+                                                    index_ptr, dim, num_index[i], cache_dim, CPU_buffer, seq_flag, 
+                                                    d_cpu_access, key_off[i]);
+    }
+    total_access += num_index[i];
+  }
+
+  for (int i = 0; i < num_iter; i++) {
+    cudaStreamSynchronize(streams[i]);
+  }
+
+  cuda_err_chk(cudaDeviceSynchronize());
+  cuda_err_chk(cudaDeviceSynchronize());
+  cudaMemcpy(&cpu_access_count, d_cpu_access, sizeof(unsigned int), cudaMemcpyDeviceToHost);
+
+  auto t2 = Clock::now();
+  auto us = std::chrono::duration_cast<std::chrono::microseconds>(
+      t2 - t1); // Microsecond (as int)
+  auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+      t2 - t1); // Microsecond (as int)
+  const float ms_fractional =
+      static_cast<float>(us.count()) / 1000; // Milliseconds (as float)
+
+  //std::cout << "Duration = " << us.count() << "µs (" << ms_fractional << "ms)"
+    //        << std::endl;
+ 
+  kernel_time += ms_fractional;
+
+  for (int i = 0; i < num_iter; i++) {
+      cudaStreamDestroy(streams[i]);
+  }
+  return;
+}
 
 
 
@@ -364,6 +484,8 @@ PYBIND11_MODULE(BAM_Feature_Store, m) {
       .def(py::init<>())
       .def("init_controllers", &BAM_Feature_Store<float>::init_controllers)
       .def("read_feature", &BAM_Feature_Store<float>::read_feature)
+      .def("read_feature_hetero", &BAM_Feature_Store<float>::read_feature_hetero)
+      .def("read_feature_merged_hetero", &BAM_Feature_Store<float>::read_feature_merged_hetero)
       .def("read_feature_merged", &BAM_Feature_Store<float>::read_feature_merged)
       .def("set_window_buffering", &BAM_Feature_Store<float>::set_window_buffering)
       .def("cpu_backing_buffer", &BAM_Feature_Store<float>::cpu_backing_buffer)
@@ -387,7 +509,10 @@ PYBIND11_MODULE(BAM_Feature_Store, m) {
       .def(py::init<>())
       .def("init_controllers", &BAM_Feature_Store<int64_t>::init_controllers)
       .def("read_feature", &BAM_Feature_Store<int64_t>::read_feature)
+      .def("read_feature_hetero", &BAM_Feature_Store<int64_t>::read_feature_hetero)
       .def("read_feature_merged", &BAM_Feature_Store<int64_t>::read_feature_merged)
+      .def("read_feature_merged_hetero", &BAM_Feature_Store<int64_t>::read_feature_merged_hetero)
+
       .def("set_window_buffering", &BAM_Feature_Store<int64_t>::set_window_buffering)
       .def("cpu_backing_buffer", &BAM_Feature_Store<int64_t>::cpu_backing_buffer)
       .def("set_cpu_buffer", &BAM_Feature_Store<int64_t>::set_cpu_buffer)

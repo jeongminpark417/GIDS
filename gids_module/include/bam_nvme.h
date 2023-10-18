@@ -97,13 +97,15 @@ struct BAM_Feature_Store {
   void init_controllers(GIDS_Controllers GIDS_ctrl, uint32_t ps, uint64_t r_off, uint64_t num_ele, uint64_t cache_size, 
                         uint64_t num_ssd);
 
-  void read_feature(uint64_t tensor_ptr, uint64_t index_ptr,int64_t num_index, int dim, int cache_dim);
+  void read_feature(uint64_t tensor_ptr, uint64_t index_ptr,int64_t num_index, int dim, int cache_dim, uint64_t key_off);
+  void read_feature_hetero(int num_iter, const std::vector<uint64_t>&  i_ptr_list, const std::vector<uint64_t>& i_index_ptr_list, const std::vector<uint64_t>&   num_index, int dim, int cache_dim, const std::vector<uint64_t>& key_off);
   void read_feature_merged(int num_iter, const std::vector<uint64_t>&  i_ptr_list, const std::vector<uint64_t>& i_index_ptr_list, const std::vector<uint64_t>&   num_index, int dim, int cache_dim);
+  void read_feature_merged_hetero(int num_iter, const std::vector<uint64_t>&  i_ptr_list, const std::vector<uint64_t>& i_index_ptr_list, const std::vector<uint64_t>&   num_index, int dim, int cache_dim, const std::vector<uint64_t>& key_off);
 
   void cpu_backing_buffer(uint64_t dim, uint64_t len);
   void set_cpu_buffer(uint64_t idx_buffer, int num);  
 
-  void set_window_buffering(uint64_t id_idx,  int64_t num_pages); 
+  void set_window_buffering(uint64_t id_idx,  int64_t num_pages, int hash_off); 
   void print_stats();
   void print_stats_no_ctrl();
 

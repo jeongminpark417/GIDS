@@ -3,7 +3,7 @@
 template <typename T = float>
 __global__ void read_feature_kernel(array_d_t<T> *dr, T *out_tensor_ptr,
                                     int64_t *index_ptr, int dim,
-                                    int64_t num_idx, int cache_dim) {
+                                    int64_t num_idx, int cache_dim, uint64_t key_off) {
  uint64_t bid = blockIdx.x;
   int num_warps = blockDim.x / 32;
   int warp_id = threadIdx.x / 32;
@@ -11,7 +11,7 @@ __global__ void read_feature_kernel(array_d_t<T> *dr, T *out_tensor_ptr,
   if (idx_idx < num_idx) {
  	    bam_ptr<T> ptr(dr);
 
-       	  uint64_t row_index = index_ptr[idx_idx];
+       	  uint64_t row_index = index_ptr[idx_idx] + key_off;
       	uint64_t tid = threadIdx.x % 32;
 
 
@@ -25,7 +25,7 @@ __global__ void read_feature_kernel(array_d_t<T> *dr, T *out_tensor_ptr,
 template <typename T = float>
 __global__ void read_feature_kernel_with_cpu_backing_memory(array_d_t<T> *dr, range_d_t<T> *range, T *out_tensor_ptr,
                                     int64_t *index_ptr, int dim,
-                                    int64_t num_idx, int cache_dim, GIDS_CPU_buffer<T> CPU_buffer, bool cpu_seq, unsigned int* d_cpu_access) {
+                                    int64_t num_idx, int cache_dim, GIDS_CPU_buffer<T> CPU_buffer, bool cpu_seq, unsigned int* d_cpu_access, uint64_t key_off) {
 
   uint64_t bid = blockIdx.x;
 
@@ -35,7 +35,7 @@ __global__ void read_feature_kernel_with_cpu_backing_memory(array_d_t<T> *dr, ra
   if (idx_idx < num_idx) {
  	    bam_ptr<T> ptr(dr);
 
-      uint64_t row_index = index_ptr[idx_idx];
+      uint64_t row_index = index_ptr[idx_idx] + key_off;
       uint64_t tid = threadIdx.x % 32;
 
       uint32_t cpu_off = range -> get_cpu_offset(row_index);
@@ -92,10 +92,10 @@ __global__ void set_cpu_buffer_kernel(range_d_t<T> *d_range, uint64_t* idx_ptr, 
 
 template <typename T = float>
 __global__
-void set_window_buffering_kernel(array_d_t<T>* dr, uint64_t *index_ptr, uint64_t page_size){
+void set_window_buffering_kernel(array_d_t<T>* dr, uint64_t *index_ptr, uint64_t page_size, int hash_off){
 	bam_ptr<T> ptr(dr);
 	if(threadIdx.x == 0){
-		uint64_t page_idx = index_ptr[blockIdx.x];
+		uint64_t page_idx = index_ptr[blockIdx.x] + hash_off;
 		ptr.set_window_buffer_counter(page_idx * page_size/sizeof(T), 1);
 	}
 }

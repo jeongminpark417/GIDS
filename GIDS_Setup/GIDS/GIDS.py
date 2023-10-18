@@ -13,7 +13,8 @@ class GIDS():
         window_buffer=False, wb_size = 8, 
         accumulator_flag = False, 
         long_type=False, 
-        heterograph=False):
+        heterograph=False,
+        heterograph_map=None):
 
         #self.sample_type = "LADIES"
 
@@ -44,6 +45,7 @@ class GIDS():
        
         #True if the graph is heterogenous graph
         self.heterograph = heterograph
+        self.heterograph_map = heterograph_map
         self.graph_GIDS = None
 
         self.cache_dim = cache_dim
@@ -99,15 +101,22 @@ class GIDS():
                 else:
                     s_time = time.time()
                     input_tensor = value.to(self.gids_device)
+                    key_off = 0
+                    if(self.heterograph_map != None):
+                        if (key in self.heterograph_map):
+                            key_off = self.heterograph_map[key]
+                        else:
+                            print("Cannot find key: ", key, " in the heterograph map!")
+                        
                     num_pages = len(input_tensor)
-                    self.BAM_FS.set_window_buffering(input_tensor.data_ptr(), num_pages)
+                    self.BAM_FS.set_window_buffering(input_tensor.data_ptr(), num_pages, key_off)
                     e_time = time.time()
                     self.WB_time += e_time - s_time
         
         else:
             input_tensor = batch[0].to(self.gids_device)
             num_pages = len(input_tensor)
-            self.BAM_FS.set_window_buffering(input_tensor.data_ptr(), num_pages)
+            self.BAM_FS.set_window_buffering(input_tensor.data_ptr(), num_pages, 0)
             e_time = time.time()
             self.WB_time += e_time - s_time
             
@@ -151,6 +160,7 @@ class GIDS():
             index_size_list = []
             index_ptr_list = []
             return_torch_list = []
+            key_list = []
 
             if(len(self.return_torch_buffer) != 0):
                 return_ten = self.return_torch_buffer.pop(0)
@@ -195,6 +205,12 @@ class GIDS():
                             empty_t = torch.empty((0, dim)).to(self.gids_device)
                             ret_ten[k] = empty_t
                         else:
+                            key_off = 0
+                            if(self.heterograph_map != None):
+                                if (key in self.heterograph_map):
+                                    key_off = self.heterograph_map[key]
+                                else:
+                                    print("Cannot find key: ", key, " in the heterograph map!")
                             v = v.to(self.gids_device)
                             index_size = len(v)
                             index_size_list.append(index_size)
@@ -202,10 +218,11 @@ class GIDS():
                             index_ptr_list.append(v.data_ptr())
                             ret_ten[k] = return_torch
                             return_torch_list.append(return_torch.data_ptr())
+                            key_list.append(key_off)
                             num_concurrent_iter += 1
                     self.return_torch_buffer.append(ret_ten)
+                self.BAM_FS.read_feature_merged_hetero(num_concurrent_iter, return_torch_list, index_ptr_list, index_size_list, dim, self.cache_dim, key_list)
 
-                self.BAM_FS.read_feature_merged(num_concurrent_iter, return_torch_list, index_ptr_list, index_size_list, dim, self.cache_dim)
                 return_ten = self.return_torch_buffer.pop(0)
                 return_batch = self.window_buffer.pop(0)
                 return_batch.append(return_ten)
@@ -259,17 +276,37 @@ class GIDS():
             if(self.heterograph):
                 batch = self.window_buffer.pop(0)
                 ret_ten = {}
-                for k , v in batch[0].items():
+                index_size_list = []
+                index_ptr_list = []
+                return_torch_list = []
+                key_list = []
+                
+                num_keys = 0
+                for key , v in batch[0].items():
                     if(len(v) == 0):
                         empty_t = torch.empty((0, dim)).to(self.gids_device)
-                        ret_ten[k] = empty_t
+                        ret_ten[key] = empty_t
                     else:
+                        key_off = 0
+                        if(self.heterograph_map != None):
+                            if (key in self.heterograph_map):
+                                key_off = self.heterograph_map[key]
+                            else:
+                                print("Cannot find key: ", key, " in the heterograph map!")
+                        
                         g_index = v.to(self.gids_device)
                         index_size = len(g_index)
                         index_ptr = g_index.data_ptr()
+                        
                         return_torch =  torch.zeros([index_size,dim], dtype=torch.float, device=self.gids_device)
-                        self.BAM_FS.read_feature(return_torch.data_ptr(), index_ptr, index_size, dim, self.cache_dim)
-                        ret_ten[k] = return_torch
+                        return_torch_list.append(return_torch.data_ptr())
+                        ret_ten[key] = return_torch
+                        num_keys += 1
+                        index_ptr_list.append(index_ptr)
+                        index_size_list.append(index_size)
+                        key_list.append(key_off)
+
+                self.BAM_FS.read_feature_hetero(num_keys, return_torch_list, index_ptr_list, index_size_list, dim, self.cache_dim, key_list)
 
                 batch.append(ret_ten)
                 self.GIDS_time += time.time() - GIDS_time_start

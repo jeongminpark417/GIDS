@@ -130,10 +130,11 @@ class IGB260MDGLDataset(DGLDataset):
         node_labels = torch.from_numpy(dataset.paper_label).to(torch.long)
 
         print("node edge:", node_edges)
-        
-        edge_row_idx = torch.from_numpy(np.load('/mnt/nvme15/IGB260M_part_2/full/processed/paper__cites__paper/edge_index_csc_row_idx.npy'))
-        edge_col_idx = torch.from_numpy(np.load('/mnt/nvme15/IGB260M_part_2/full/processed/paper__cites__paper/edge_index_csc_col_idx.npy'))
-        edge_idx = torch.from_numpy(np.load('/mnt/nvme15/IGB260M_part_2/full/processed/paper__cites__paper/edge_index_csc_edge_idx.npy'))
+        #cur_path = osp.join(self.dir, self.args.dataset_size, 'processed')
+        cur_path = '/mnt/nvme15/IGB260M_part_2/full/processed'
+        edge_row_idx = torch.from_numpy(np.load(cur_path + '/paper__cites__paper/edge_index_csc_row_idx.npy'))
+        edge_col_idx = torch.from_numpy(np.load(cur_path + '/paper__cites__paper/edge_index_csc_col_idx.npy'))
+        edge_idx = torch.from_numpy(np.load(cur_path + '/paper__cites__paper/edge_index_csc_edge_idx.npy'))
         
 #        self.graph = dgl.graph((node_edges[:, 0],node_edges[:, 1]), num_nodes=node_features.shape[0])
         if self.args.dataset_size == 'full':   
@@ -405,13 +406,13 @@ class IGBHeteroDGLDatasetMassive(DGLDataset):
         'fos', 'node_feat.npy'), mmap_mode='r'))
         num_nodes_dict = {'paper': num_paper_nodes, 'author': num_author_nodes, 'institute': len(institute_node_features), 'fos': len(fos_node_features)}
         print("Setting the graph structure")
-        #graph_data = {
-        #    ('paper', 'cites', 'paper'): (paper_paper_edges[:, 0], paper_paper_edges[:, 1]),
-        #    ('paper', 'written_by', 'author'): (author_paper_edges[:, 0], author_paper_edges[:, 1]),
-        #    ('author', 'affiliated_to', 'institute'): (affiliation_author_edges[:, 0], affiliation_author_edges[:, 1]),
-        #    ('paper', 'topic', 'fos'): (paper_fos_edges[:, 0], paper_fos_edges[:, 1])
-        #}
-        graph_data = torch.load("/mnt/nvme22/IGBH_csc.pth")
+        graph_data = {
+            ('paper', 'cites', 'paper'): (paper_paper_edges[:, 0], paper_paper_edges[:, 1]),
+            ('paper', 'written_by', 'author'): (author_paper_edges[:, 0], author_paper_edges[:, 1]),
+            ('author', 'affiliated_to', 'institute'): (affiliation_author_edges[:, 0], affiliation_author_edges[:, 1]),
+            ('paper', 'topic', 'fos'): (paper_fos_edges[:, 0], paper_fos_edges[:, 1])
+        }
+        #graph_data = torch.load("/mnt/nvme22/IGBH_csc.pth")
         print("dgl.heterograph init starting")
         self.graph = dgl.heterograph(graph_data, num_nodes_dict) 
         self.graph = self.graph.formats('csc')

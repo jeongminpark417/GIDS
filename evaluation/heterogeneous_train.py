@@ -44,7 +44,7 @@ def track_acc_BaM(g, args, device, label_array=None):
         num_ssd = args.num_ssd,
         cache_size = args.cache_size,
         wb_size = args.wb_size, #rename
-        ssd_list=[5],
+       # ssd_list=[5],
         cache_dim = args.cache_dim #should be removed
     )
 
@@ -200,7 +200,7 @@ def track_acc_BaM(g, args, device, label_array=None):
 
 
 
-def track_acc_GIDS(g, category, args, device, label_array=None):
+def track_acc_GIDS(g, category, args, device, label_array=None, key_offset=None):
 
     GIDS_Loader = None
     GIDS_Loader = GIDS.GIDS(
@@ -214,7 +214,8 @@ def track_acc_GIDS(g, category, args, device, label_array=None):
         accumulator_flag = args.accumulator,
         cache_dim = args.cache_dim,
         #ssd_list=[5],
-        heterograph = True
+        heterograph = True,
+        heterograph_map = key_offset
     )
     
     dim = args.emb_size
@@ -295,7 +296,7 @@ def track_acc_GIDS(g, category, args, device, label_array=None):
         lr=args.learning_rate, weight_decay=args.decay
         )
 
-    warm_up_iter = 100
+    warm_up_iter = 1000
     # Setup is Done
     for epoch in tqdm.tqdm(range(args.epochs)):
         epoch_start = time.time()
@@ -445,11 +446,21 @@ if __name__ == '__main__':
     print("Storage Access Accumulator: ", args.accumulator)
 
     labels = None
+    key_offset = None
+
     device = f'cuda:' + str(args.device) if torch.cuda.is_available() else 'cpu'
     if(args.data == 'IGB'):
         print("Dataset: IGB")
         if(args.dataset_size == 'full' or args.dataset_size == 'large'):
             dataset = IGBHeteroDGLDatasetMassive(args)
+            # User need to fill this out for their dataset based how it is stored in SSD
+            if(args.dataset_size == 'full'):
+                key_offset = {
+                    'paper' : 0,
+                    'author' : 269346174,
+                    'fos' : 546567057,
+                    'institute' : 547280017
+                }
         else:
             dataset = IGBHeteroDGLDataset(args)
         g = dataset[0]
@@ -463,8 +474,15 @@ if __name__ == '__main__':
         g=None
         dataset=None
     
+    # nt = g.ntypes
+
+    # for t in nt:
+    #     num_t = g.num_nodes(t)
+    #     print("type: ", t, " num: ", num_t)
+
+
     category = g.predict
-    track_acc_GIDS(g, category, args, device, labels)
+    track_acc_GIDS(g, category, args, device, labels, key_offset)
     #track_acc(g, args, device, labels)
 
 
