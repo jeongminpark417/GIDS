@@ -18,6 +18,7 @@
 #include "gids_kernel.cu"
 //#include <bafs_ptr.h>
 
+
 typedef std::chrono::high_resolution_clock Clock;
 
 void GIDS_Controllers::init_GIDS_controllers(uint32_t num_ctrls, uint64_t q_depth, uint64_t num_q, 
@@ -203,7 +204,8 @@ void BAM_Feature_Store<TYPE>::read_feature_hetero(int num_iter, const std::vecto
 
   for(uint64_t i = 0;  i < num_iter; i++){
     uint64_t i_ptr = i_ptr_list[i];
-    uint64_t    i_index_ptr =  i_index_ptr_list[i];         
+    uint64_t    i_index_ptr =  i_index_ptr_list[i];  
+    printf("i ptr: %llu\n",i_ptr);      
     TYPE *tensor_ptr = (TYPE *) i_ptr;
     int64_t *index_ptr = (int64_t *)i_index_ptr;
 
@@ -212,10 +214,12 @@ void BAM_Feature_Store<TYPE>::read_feature_hetero(int num_iter, const std::vecto
     uint64_t g_size = (num_index[i]+n_warp - 1) / n_warp;
 
     if(cpu_buffer_flag == false){
+      printf("CPU read_feature_kernel start\n");
       read_feature_kernel<TYPE><<<g_size, b_size, 0, streams[i] >>>(a->d_array_ptr, tensor_ptr,
                                                     index_ptr, dim, num_index[i], cache_dim, key_off[i]);
     }
     else{
+      printf("CPU read_feature_kernel_with_cpu_backing_memory start\n");
       read_feature_kernel_with_cpu_backing_memory<<<g_size, b_size, 0, streams[i] >>>(a->d_array_ptr, d_range ,tensor_ptr,
                                                     index_ptr, dim, num_index[i], cache_dim, CPU_buffer, seq_flag, 
                                                     d_cpu_access,  key_off[i]);
@@ -247,8 +251,12 @@ void BAM_Feature_Store<TYPE>::read_feature_hetero(int num_iter, const std::vecto
   for (int i = 0; i < num_iter; i++) {
       cudaStreamDestroy(streams[i]);
   }
+  
+  printf("CPU read_feature_kernel done\n");
+
   return;
 }
+
 
 
 template <typename TYPE>
@@ -485,6 +493,7 @@ PYBIND11_MODULE(BAM_Feature_Store, m) {
       .def("init_controllers", &BAM_Feature_Store<float>::init_controllers)
       .def("read_feature", &BAM_Feature_Store<float>::read_feature)
       .def("read_feature_hetero", &BAM_Feature_Store<float>::read_feature_hetero)
+
       .def("read_feature_merged_hetero", &BAM_Feature_Store<float>::read_feature_merged_hetero)
       .def("read_feature_merged", &BAM_Feature_Store<float>::read_feature_merged)
       .def("set_window_buffering", &BAM_Feature_Store<float>::set_window_buffering)
@@ -510,8 +519,10 @@ PYBIND11_MODULE(BAM_Feature_Store, m) {
       .def("init_controllers", &BAM_Feature_Store<int64_t>::init_controllers)
       .def("read_feature", &BAM_Feature_Store<int64_t>::read_feature)
       .def("read_feature_hetero", &BAM_Feature_Store<int64_t>::read_feature_hetero)
+
       .def("read_feature_merged", &BAM_Feature_Store<int64_t>::read_feature_merged)
       .def("read_feature_merged_hetero", &BAM_Feature_Store<int64_t>::read_feature_merged_hetero)
+
 
       .def("set_window_buffering", &BAM_Feature_Store<int64_t>::set_window_buffering)
       .def("cpu_backing_buffer", &BAM_Feature_Store<int64_t>::cpu_backing_buffer)

@@ -320,7 +320,7 @@ class GIDS():
                 #print(batch[0])
                 index_ptr = index.data_ptr()
                 return_torch =  torch.zeros([index_size,dim], dtype=torch.float, device=self.gids_device)
-                self.BAM_FS.read_feature(return_torch.data_ptr(), index_ptr, index_size, dim, self.cache_dim)
+                self.BAM_FS.read_feature(return_torch.data_ptr(), index_ptr, index_size, dim, self.cache_dim, 0)
                 self.GIDS_time += time.time() - GIDS_time_start
 
                 batch.append(return_torch)
@@ -351,5 +351,37 @@ class GIDS():
 
     def flush_cache(self):
         self.BAM_FS.flush_cache()
+
+    def fetch_test(self, node_id, dim):
+        index = torch.tensor([node_id], dtype=torch.int)
+        index = index.to(self.gids_device)
+        index_size = len(index)
+        index_ptr = index.data_ptr()
+
+        return_torch =  torch.zeros([index_size,dim], dtype=torch.float, device=self.gids_device)
+        torch.cuda.synchronize()
+
+        self.BAM_FS.read_feature(return_torch.data_ptr(), index_ptr, index_size, dim, self.cache_dim, 0)
+        return return_torch
+
+    
+    def fetch_hetero_test(self, node_id, dim):
+        index = torch.tensor([node_id], dtype=torch.int)
+        index = index.to(self.gids_device)
+        index_size = len(index)
+        index_ptr = index.data_ptr()
+
+        index_size_list = [index_size]
+        index_ptr_list = [index_ptr]
+        return_torch_list = []
+        return_torch =  torch.zeros([index_size,dim], dtype=torch.float, device=self.gids_device)
+        print("return torch ptr: ", return_torch.data_ptr())
+        return_torch_list.append(return_torch.data_ptr())
+        print("return torch ptr: ", return_torch.data_ptr())
+
+        key_list = [int(0)]
+        self.BAM_FS.read_feature_hetero(1, return_torch_list, index_ptr_list, index_size_list, dim, self.cache_dim, key_list)
+
+        return return_torch
 
 
