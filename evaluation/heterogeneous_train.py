@@ -16,6 +16,7 @@ import threading
 import gc
 
 import GIDS
+from GIDS import GIDS_DGLDataLoader
 
 from ogb.graphproppred import DglGraphPropPredDataset
 from ogb.nodeproppred import DglNodePropPredDataset, Evaluator
@@ -255,26 +256,20 @@ def track_acc_GIDS(g, category, args, device, label_array=None, key_offset=None)
             args.num_classes, args.num_layers, args.num_heads).to(device)
 
 
-    train_dataloader = dgl.dataloading.DataLoader(
+    #train_dataloader = dgl.dataloading.DataLoader(
+    train_dataloader =  GIDS_DGLDataLoader(
         g,
         {category: train_nid},
         sampler,
-        batch_size=args.batch_size,
+        args.batch_size,
+        GIDS_Loader,
         shuffle=True,
         drop_last=False,
         num_workers=args.num_workers,
         use_uva=False,
-        feature_dim=dim,
         use_prefetch_thread=False,
         pin_prefetcher=False,
-        use_alternate_streams=False,
-
-        use_uva_graph=True,    # Need to rename
-        bam=True,
-        #window_buffer=args.window_buffer,
-        window_buffer=False,
-        window_buffer_size=args.wb_size,
-        GIDS=GIDS_Loader
+        use_alternate_streams=False
     )
 
     val_dataloader = dgl.dataloading.DataLoader(
@@ -329,7 +324,7 @@ def track_acc_GIDS(g, category, args, device, label_array=None, key_offset=None)
             batch_inputs = ret
             transfer_start = time.time() 
 
-            batch_labels = blocks[-1].dstdata['label']['paper'] 
+            batch_labels = (blocks[-1].dstdata['label']['paper']).to(device) 
            
             blocks = [block.int().to(device) for block in blocks]
             transfer_time = transfer_time +  time.time()  - transfer_start

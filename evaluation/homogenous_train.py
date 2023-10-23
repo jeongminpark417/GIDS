@@ -14,7 +14,7 @@ import threading
 import gc
 
 import GIDS
-from ladies_sampler import LadiesSampler, normalized_edata
+from GIDS import GIDS_DGLDataLoader
 
 from ogb.graphproppred import DglGraphPropPredDataset
 from ogb.nodeproppred import DglNodePropPredDataset, Evaluator
@@ -66,24 +66,20 @@ def track_acc_BaM(g, args, device, label_array=None):
     in_feats = g.ndata['features'].shape[1]
     dim = args.dim
 
-
-    train_dataloader = dgl.dataloading.DataLoader(
+    
+    train_dataloader = GIDS_DGLDataLoader(
         g,
         train_nid,
         sampler,
-        batch_size=args.batch_size,
+        args.batch_size,
+        GIDS_Loader,
         shuffle=True,
         drop_last=False,
         num_workers=args.num_workers,
         use_uva=False,
-        use_uva_graph=False,    # Need to rename
-        bam=True,
-        feature_dim=dim,
         use_prefetch_thread=False,
         pin_prefetcher=False,
-        window_buffer=False,
         use_alternate_streams=False,
-        GIDS=GIDS_Loader
     )
 
     val_dataloader = dgl.dataloading.DataLoader(
@@ -180,7 +176,7 @@ def track_acc_BaM(g, args, device, label_array=None):
     predictions = []
     labels = []
     with torch.no_grad():
-        for _, _, blocks,_ in test_dataloader:
+        for _, _, blocks in test_dataloader:
             blocks = [block.to(device) for block in blocks]
             inputs = blocks[0].srcdata['feat']
      
@@ -211,7 +207,7 @@ def track_acc_GIDS(g, args, device, label_array=None):
         window_buffer = args.window_buffer,
         wb_size = args.wb_size,
         accumulator_flag = args.accumulator,
-       # ssd_list = [5],
+        ssd_list = [5],
         cache_dim = args.cache_dim
     
     )
@@ -229,7 +225,9 @@ def track_acc_GIDS(g, args, device, label_array=None):
         GIDS_Loader.set_cpu_buffer(pr_ten, num_pinned_nodes)
 
 
-
+    sampler = dgl.dataloading.MultiLayerNeighborSampler(
+               [int(fanout) for fanout in args.fan_out.split(',')]
+               )
 
     g.ndata['features'] = g.ndata['feat']
     g.ndata['labels'] = g.ndata['label']
@@ -239,45 +237,19 @@ def track_acc_GIDS(g, args, device, label_array=None):
     test_nid = torch.nonzero(g.ndata['test_mask'], as_tuple=True)[0]
     in_feats = g.ndata['features'].shape[1]
 
-    sampler = None
-    if (args.sample_type == 'NHS'):
-        sampler = dgl.dataloading.MultiLayerNeighborSampler(
-                [int(fanout) for fanout in args.fan_out.split(',')]
-            )
 
-    elif(args.sample_type == "ClusterGCN"):
-        sampler = dgl.dataloading.ClusterGCNSampler(
-            g,
-            args.num_partitions
-        )
-        train_nid = torch.arange(args.num_partitions)
-    #LADIES
-    else:
-        g.edata["w"] = normalized_edata(g)
-        l_out = [int(_) for _ in args.ladouts.split(",")]
-        sampler = LadiesSampler(l_out)
-
-
-    train_dataloader = dgl.dataloading.DataLoader(
+    train_dataloader = GIDS_DGLDataLoader(
         g,
         train_nid,
         sampler,
-        batch_size=args.batch_size,
+        args.batch_size,
+        GIDS_Loader,
         shuffle=True,
         drop_last=False,
         num_workers=args.num_workers,
         use_uva=False,
-        feature_dim=dim,
         use_prefetch_thread=False,
-        pin_prefetcher=False,
-        use_alternate_streams=False,
-
-        use_uva_graph=args.uva_graph, 
-        bam=True,
-        #window_buffer=args.window_buffer,
-        window_buffer=False,
-        window_buffer_size=args.wb_size,
-        GIDS=GIDS_Loader
+        use_alternate_streams=False
     )
 
     val_dataloader = dgl.dataloading.DataLoader(
@@ -308,8 +280,7 @@ def track_acc_GIDS(g, args, device, label_array=None):
         lr=args.learning_rate, weight_decay=args.decay
         )
 
-    warm_up_iter = 1000
-    eval_iter = 100
+    warm_up_iter = 100
     # Setup is Done
     for epoch in tqdm.tqdm(range(args.epochs)):
         epoch_start = time.time()
@@ -324,7 +295,7 @@ def track_acc_GIDS(g, args, device, label_array=None):
         e2e_time_start = time.time()
 
         for step, (input_nodes, seeds, blocks, ret) in enumerate(train_dataloader):
-            #if(step % 10 == 0):
+            #print("step: ", step)
             if(step == warm_up_iter):
                 print("warp up done")
                 train_dataloader.print_stats()
@@ -358,7 +329,7 @@ def track_acc_GIDS(g, args, device, label_array=None):
             epoch_loss += loss.detach()                  
             train_time = train_time + time.time() - train_start
           
-            if(step == warm_up_iter + eval_iter):
+            if(step == warm_up_iter + 100):
                 print("Performance for 100 iteration after 1000 iteration")
                 e2e_time += time.time() - e2e_time_start 
                 train_dataloader.print_stats()
@@ -382,7 +353,7 @@ def track_acc_GIDS(g, args, device, label_array=None):
     predictions = []
     labels = []
     with torch.no_grad():
-        for _, _, blocks,_ in test_dataloader:
+        for _, _, blocks in test_dataloader:
             blocks = [block.to(device) for block in blocks]
             inputs = blocks[0].srcdata['feat']
      
@@ -707,16 +678,8 @@ if __name__ == '__main__':
     parser.add_argument('--modelpath', type=str, default='deletethis.pt')
     parser.add_argument('--model_save', type=int, default=0)
 
-    # Sampling
-    parser.add_argument('--sample_type', type=str, default='NHS',
-                        choices=['NHS', 'ClusterGCN', 'LADIES'])
-    parser.add_argument('--num_partitions', type=int, default=1000)
-
-
-
     # Model parameters 
-    parser.add_argument('--fan_out', type=str, default='10,5,5')
-    parser.add_argument('--ladouts', type=str, default='64,64,64')
+    parser.add_argument('--fan_out', type=str, default='10,15')
     parser.add_argument('--batch_size', type=int, default=1024)
     parser.add_argument('--num_workers', type=int, default=0)
     parser.add_argument('--hidden_channels', type=int, default=128)
@@ -768,8 +731,6 @@ if __name__ == '__main__':
     print("CPU Feature Buffer: ", args.cpu_buffer)
     print("Window Buffering: ", args.window_buffer)
     print("Storage Access Accumulator: ", args.accumulator)
-    print("Sample Type: ", args.sample_type)
-
 
     labels = None
     device = f'cuda:' + str(args.device) if torch.cuda.is_available() else 'cpu'
@@ -777,26 +738,16 @@ if __name__ == '__main__':
         print("Dataset: IGB")
         dataset = IGB260MDGLDataset(args)
         g = dataset[0]
-        if(args.sample_type == "LADIES"):
-            print("LADIES")
-            g = g.formats('coo')
-        else:
-            g  = g.formats('csc')
+        g  = g.formats('csc')
     elif(args.data == "OGB"):
         print("Dataset: OGB")
         dataset = OGBDGLDataset(args)
         g = dataset[0]
-        if(args.sample_type == "LADIES"):
-            print("LADIES")
-            g = g.formats('coo')
-            g = g.long()
-        else:
-            g  = g.formats('csc')
+        g  = g.formats('csc')
     else:
         g=None
         dataset=None
-
-    print("Fortmats", g.formats())
+    
     track_acc_GIDS(g, args, device, labels)
     #track_acc(g, args, device, labels)
 
