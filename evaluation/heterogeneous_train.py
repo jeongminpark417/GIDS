@@ -36,170 +36,6 @@ def print_times(transfer_time, train_time, e2e_time):
     print("train time: ", train_time)
     print("e2e time: ", e2e_time)
 
-def track_acc_BaM(g, args, device, label_array=None):
-    GIDS_Loader = None
-    GIDS_Loader = GIDS.GIDS(
-        page_size = args.page_size,
-        off = args.offset,
-        num_ele = args.num_ele,
-        num_ssd = args.num_ssd,
-        cache_size = args.cache_size,
-        wb_size = args.wb_size, #rename
-       # ssd_list=[5],
-        cache_dim = args.cache_dim #should be removed
-    )
-
-    # Using BaM for the Graph Sampling Stage
-    GIDS_Loader.init_graph_GIDS(512, 0, 512, 9 * 1000 * 1000 * 1000, 1)
-    adj_mat =  g.adj_sparse('csc')
-    GIDS_Loader.graph_GIDS.set_offsets(0,len(adj_mat[0]),len(adj_mat[0])+len(adj_mat[1]))
-
-    sampler = dgl.dataloading.MultiLayerNeighborSampler(
-               [int(fanout) for fanout in args.fan_out.split(',')],
-                GIDS_flag=True, 
-                GIDS=GIDS_Loader)
-
-    g.ndata['features'] = g.ndata['feat']
-    g.ndata['labels'] = g.ndata['label']
-
-    train_nid = torch.nonzero(g.ndata['train_mask'], as_tuple=True)[0]
-    val_nid = torch.nonzero(g.ndata['val_mask'], as_tuple=True)[0]
-    test_nid = torch.nonzero(g.ndata['test_mask'], as_tuple=True)[0]
-    in_feats = g.ndata['features'].shape[1]
-    dim = args.dim
-
-
-    train_dataloader = dgl.dataloading.DataLoader(
-        g,
-        train_nid,
-        sampler,
-        batch_size=args.batch_size,
-        shuffle=True,
-        drop_last=False,
-        num_workers=args.num_workers,
-        use_uva=False,
-        use_uva_graph=False,    # Need to rename
-        bam=True,
-        feature_dim=dim,
-        use_prefetch_thread=False,
-        pin_prefetcher=False,
-        window_buffer=False,
-        use_alternate_streams=False,
-        GIDS=GIDS_Loader
-    )
-
-    val_dataloader = dgl.dataloading.DataLoader(
-        g, val_nid, sampler,
-        batch_size=args.batch_size,
-        shuffle=False, drop_last=False,
-        num_workers=args.num_workers)
-
-    test_dataloader = dgl.dataloading.DataLoader(
-        g, test_nid, sampler,
-        batch_size=args.batch_size,
-        shuffle=True, drop_last=False,
-        num_workers=args.num_workers)
-
-    if args.model_type == 'gcn':
-        model = GCN(in_feats, args.hidden_channels, args.num_classes, 
-            args.num_layers).to(device)
-    if args.model_type == 'sage':
-        model = SAGE(in_feats, args.hidden_channels, args.num_classes, 
-            args.num_layers).to(device)
-    if args.model_type == 'gat':
-        model = GAT(in_feats, args.hidden_channels, args.num_classes, 
-            args.num_layers, args.num_heads).to(device)
-
-    loss_fcn = nn.CrossEntropyLoss().to(device)
-    optimizer = optim.Adam(
-        model.parameters(), 
-        lr=args.learning_rate, weight_decay=args.decay
-        )
-
-    # Setup is Done
-    for epoch in tqdm.tqdm(range(args.epochs)):
-        epoch_start = time.time()
-        epoch_loss = 0
-        train_acc = 0
-        model.train()
-
-        batch_input_time = 0
-        train_time = 0
-        transfer_time = 0
-        e2e_time = 0
-        e2e_time_start = time.time()
-
-        for step, (input_nodes, seeds, blocks, ret) in enumerate(train_dataloader):
-            
-            if(step == 1000):
-                print("warp up done")
-                batch_input_time = 0
-                transfer_time = 0
-                train_time = 0
-                e2e_time = 0
-                e2e_time_start = time.time()
-        
-            
-            # Features are fetched by the baseline GIDS dataloader in ret
-            batch_inputs = ret
-            batch_labels = blocks[-1].dstdata['labels']
-            
-
-            transfer_start = time.time() 
-            blocks = [block.int().to(device) for block in blocks]
-            batch_labels = batch_labels.to(device)
-            transfer_time = transfer_time +  time.time()  - transfer_start
- 
-            # Model Training Stage
-            train_start = time.time()
-            batch_pred = model(blocks, batch_inputs)
-            loss = loss_fcn(batch_pred, batch_labels)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            epoch_loss += loss.detach()                  
-            train_time = train_time + time.time() - train_start
-          
-            if(step == 1100):
-                print("Performance for 100 iteration after 1000 iteration")
-                e2e_time += time.time() - e2e_time_start 
-                train_dataloader.print_stats()
-                train_dataloader.print_timer()
-                print_times(transfer_time, train_time, e2e_time)
-             
-                batch_input_time = 0
-                transfer_time = 0
-                train_time = 0
-                e2e_time = 0
-                
-                #Just testing 100 iterations remove the next line if you do not want to halt
-                return None
-
-  
-    # Evaluation
-
-    model.eval()
-    predictions = []
-    labels = []
-    with torch.no_grad():
-        for _, _, blocks,_ in test_dataloader:
-            blocks = [block.to(device) for block in blocks]
-            inputs = blocks[0].srcdata['feat']
-     
-            if(args.data == 'IGB'):
-                labels.append(blocks[-1].dstdata['label'].cpu().numpy())
-            elif(args.data == 'OGB'):
-                out_label = torch.index_select(label_array, 0, b[1]).flatten()
-                labels.append(out_label.numpy())
-            predict = model(blocks, inputs).argmax(1).cpu().numpy()
-            predictions.append(predict)
-
-        predictions = np.concatenate(predictions)
-        labels = np.concatenate(labels)
-        test_acc = sklearn.metrics.accuracy_score(labels, predictions)*100
-    print("Test Acc {:.2f}%".format(test_acc))
-
-
 
 def track_acc_GIDS(g, category, args, device, label_array=None, key_offset=None):
 
@@ -262,13 +98,11 @@ def track_acc_GIDS(g, category, args, device, label_array=None, key_offset=None)
         {category: train_nid},
         sampler,
         args.batch_size,
+        dim,
         GIDS_Loader,
         shuffle=True,
         drop_last=False,
         num_workers=args.num_workers,
-        use_uva=False,
-        use_prefetch_thread=False,
-        pin_prefetcher=False,
         use_alternate_streams=False
     )
 
