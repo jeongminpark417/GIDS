@@ -205,7 +205,6 @@ void BAM_Feature_Store<TYPE>::read_feature_hetero(int num_iter, const std::vecto
   for(uint64_t i = 0;  i < num_iter; i++){
     uint64_t i_ptr = i_ptr_list[i];
     uint64_t    i_index_ptr =  i_index_ptr_list[i];  
-    printf("i ptr: %llu\n",i_ptr);      
     TYPE *tensor_ptr = (TYPE *) i_ptr;
     int64_t *index_ptr = (int64_t *)i_index_ptr;
 
@@ -214,12 +213,10 @@ void BAM_Feature_Store<TYPE>::read_feature_hetero(int num_iter, const std::vecto
     uint64_t g_size = (num_index[i]+n_warp - 1) / n_warp;
 
     if(cpu_buffer_flag == false){
-      printf("CPU read_feature_kernel start\n");
       read_feature_kernel<TYPE><<<g_size, b_size, 0, streams[i] >>>(a->d_array_ptr, tensor_ptr,
                                                     index_ptr, dim, num_index[i], cache_dim, key_off[i]);
     }
     else{
-      printf("CPU read_feature_kernel_with_cpu_backing_memory start\n");
       read_feature_kernel_with_cpu_backing_memory<<<g_size, b_size, 0, streams[i] >>>(a->d_array_ptr, d_range ,tensor_ptr,
                                                     index_ptr, dim, num_index[i], cache_dim, CPU_buffer, seq_flag, 
                                                     d_cpu_access,  key_off[i]);
@@ -252,7 +249,6 @@ void BAM_Feature_Store<TYPE>::read_feature_hetero(int num_iter, const std::vecto
       cudaStreamDestroy(streams[i]);
   }
   
-  printf("CPU read_feature_kernel done\n");
 
   return;
 }

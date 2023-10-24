@@ -125,7 +125,7 @@ def track_acc_GIDS(g, category, args, device, label_array=None, key_offset=None)
         lr=args.learning_rate, weight_decay=args.decay
         )
 
-    warm_up_iter = 1000
+    warm_up_iter = 200
     # Setup is Done
     for epoch in tqdm.tqdm(range(args.epochs)):
         epoch_start = time.time()

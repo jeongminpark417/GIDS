@@ -507,7 +507,7 @@ class GIDS():
                 num_keys = 0
                 for key , v in batch[0].items():
                     if(len(v) == 0):
-                        empty_t = torch.empty((0, dim)).to(self.gids_device)
+                        empty_t = torch.empty((0, dim)).to(self.gids_device).contiguous()
                         ret_ten[key] = empty_t
                     else:
                         key_off = 0
@@ -521,7 +521,7 @@ class GIDS():
                         index_size = len(g_index)
                         index_ptr = g_index.data_ptr()
                         
-                        return_torch =  torch.zeros([index_size,dim], dtype=torch.float, device=self.gids_device)
+                        return_torch =  torch.zeros([index_size,dim], dtype=torch.float, device=self.gids_device).contiguous()
                         return_torch_list.append(return_torch.data_ptr())
                         ret_ten[key] = return_torch
                         num_keys += 1
@@ -542,7 +542,7 @@ class GIDS():
                 index_size = len(index)
                 #print(batch[0])
                 index_ptr = index.data_ptr()
-                return_torch =  torch.zeros([index_size,dim], dtype=torch.float, device=self.gids_device)
+                return_torch =  torch.zeros([index_size,dim], dtype=torch.float, device=self.gids_device).contiguous()
                 self.BAM_FS.read_feature(return_torch.data_ptr(), index_ptr, index_size, dim, self.cache_dim, 0)
                 self.GIDS_time += time.time() - GIDS_time_start
 
