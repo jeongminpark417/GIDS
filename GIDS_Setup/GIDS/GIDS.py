@@ -6,6 +6,229 @@ import nvtx
 
 import BAM_Feature_Store
 
+import dgl
+from torch.utils.data import DataLoader
+from collections.abc import Mapping
+
+from dgl.dataloading import create_tensorized_dataset, WorkerInitWrapper, remove_parent_storage_columns
+from dgl.utils import (
+    recursive_apply, ExceptionWrapper, recursive_apply_pair, set_num_threads, get_num_threads,
+    get_numa_nodes_cores, context_of, dtype_of)
+
+from dgl import DGLHeteroGraph
+from dgl.frame import LazyFeature
+from dgl.storages import wrap_storage
+from dgl.dataloading.base import BlockSampler, as_edge_prediction_sampler
+from dgl import backend as F
+from dgl.distributed import DistGraph
+from dgl.multiprocessing import call_once_and_share
+
+def _get_device(device):
+    device = torch.device(device)
+    if device.type == 'cuda' and device.index is None:
+        device = torch.device('cuda', torch.cuda.current_device())
+    return device
+
+class CollateWrapper(object):
+    def __init__(self, sample_func, g,  device):
+        self.sample_func = sample_func
+        self.g = g
+        self.device = device
+
+    def __call__(self, items):
+        graph_device = getattr(self.g, 'device', None)   
+        items = recursive_apply(items, lambda x: x.to(self.device))
+        batch = self.sample_func(self.g, items)
+        return recursive_apply(batch, remove_parent_storage_columns, self.g)
+
+
+class _PrefetchingIter(object):
+    def __init__(self, dataloader, dataloader_it, GIDS_Loader=None):
+        self.dataloader_it = dataloader_it
+        self.dataloader = dataloader
+        self.graph_sampler = self.dataloader.graph_sampler
+        self.GIDS_Loader=GIDS_Loader
+        
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        cur_it = self.dataloader_it
+        batch = self.GIDS_Loader.fetch_feature(self.dataloader.dim, cur_it, self.GIDS_Loader.gids_device)
+        return batch
+
+
+
+class GIDS_DGLDataLoader(torch.utils.data.DataLoader):
+
+    def __init__(self, graph, indices, graph_sampler, batch_size, dim, GIDS, device=None, use_ddp=False,
+                 ddp_seed=0, drop_last=False, shuffle=False,
+                 use_alternate_streams=None,
+                 
+                 **kwargs):
+
+        use_uva = False
+        self.GIDS_Loader = GIDS
+        self.dim = dim
+
+
+        if isinstance(kwargs.get('collate_fn', None), CollateWrapper):
+            assert batch_size is None       # must be None
+            # restore attributes
+            self.graph = graph
+            self.indices = indices
+            self.graph_sampler = graph_sampler
+            self.device = device
+            self.use_ddp = use_ddp
+            self.ddp_seed = ddp_seed
+            self.shuffle = shuffle
+            self.drop_last = drop_last
+            self.use_alternate_streams = use_alternate_streams
+            self.use_uva = use_uva
+            kwargs['batch_size'] = None
+            super().__init__(**kwargs)
+            return
+
+
+        if isinstance(graph, DistGraph):
+            raise TypeError(
+                'Please use dgl.dataloading.DistNodeDataLoader or '
+                'dgl.datalaoding.DistEdgeDataLoader for DistGraphs.')
+  
+        self.graph = graph
+        self.indices = indices     
+        num_workers = kwargs.get('num_workers', 0)
+
+        indices_device = None
+        try:
+            if isinstance(indices, Mapping):
+                indices = {k: (torch.tensor(v) if not torch.is_tensor(v) else v)
+                           for k, v in indices.items()}
+                indices_device = next(iter(indices.values())).device
+            else:
+                indices = torch.tensor(indices) if not torch.is_tensor(indices) else indices
+                indices_device = indices.device
+        except:     # pylint: disable=bare-except
+            # ignore when it fails to convert to torch Tensors.
+            pass
+
+        if indices_device is None:
+            if not hasattr(indices, 'device'):
+                raise AttributeError('Custom indices dataset requires a \"device\" \
+                attribute indicating where the indices is.')
+            indices_device = indices.device
+
+        if device is None:     
+            device = torch.cuda.current_device()
+        self.device = _get_device(device)
+
+        # Sanity check - we only check for DGLGraphs.
+        if isinstance(self.graph, DGLHeteroGraph):            
+            self.graph.create_formats_()
+            if not self.graph._graph.is_pinned():
+                self.graph._graph.pin_memory_()
+            
+
+            # Check use_alternate_streams
+            if use_alternate_streams is None:
+                use_alternate_streams = (
+                    self.device.type == 'cuda' and self.graph.device.type == 'cpu' and
+                    not use_uva)
+
+        if (torch.is_tensor(indices) or (
+                isinstance(indices, Mapping) and
+                all(torch.is_tensor(v) for v in indices.values()))):
+            self.dataset = create_tensorized_dataset(
+                indices, batch_size, drop_last, use_ddp, ddp_seed, shuffle,
+                kwargs.get('persistent_workers', False))
+        else:
+            self.dataset = indices
+
+        self.ddp_seed = ddp_seed
+        self.use_ddp = use_ddp
+        self.use_uva = use_uva
+        self.shuffle = shuffle
+        self.drop_last = drop_last
+        self.graph_sampler = graph_sampler
+        self.use_alternate_streams = use_alternate_streams
+
+
+        self.cpu_affinity_enabled = False
+
+        worker_init_fn = WorkerInitWrapper(kwargs.get('worker_init_fn', None))
+
+        self.other_storages = {}
+
+        super().__init__(
+            self.dataset,
+            collate_fn=CollateWrapper(
+                self.graph_sampler.sample, graph, self.device),
+            batch_size=None,
+            pin_memory=False,
+            worker_init_fn=worker_init_fn,
+            **kwargs)
+
+    def __iter__(self):
+        if self.shuffle:
+            self.dataset.shuffle()
+        # When using multiprocessing PyTorch sometimes set the number of PyTorch threads to 1
+        # when spawning new Python threads.  This drastically slows down pinning features.
+        num_threads = torch.get_num_threads() if self.num_workers > 0 else None
+        return _PrefetchingIter(
+            self, super().__iter__(), GIDS_Loader=self.GIDS_Loader)
+ 
+    def print_stats(self):
+        self.GIDS_Loader.print_stats()
+
+    def print_timer(self):
+        #if(self.bam):
+        #     print("feature aggregation time test: %f" % self.sample_time)
+        #print("graph travel time: %f" % self.graph_travel_time)
+        self.sample_time = 0.0
+        self.graph_travel_time = 0.0
+
+
+# class GIDS_DGLDataLoader(dgl.dataloading.DataLoader):
+#     def __init__(self, graph, indices, graph_sampler, batch_size, dim, GIDS_Loader, shuffle=True, drop_last=False, num_workers=0, use_uva=False, pin_prefetcher=None, use_alternate_streams=None):
+#         # Your constructor logic here
+
+#         if not graph._graph.is_pinned():
+#             graph._graph.pin_memory_()
+        
+#         self.dim = dim
+#         self.GIDS_Loader = GIDS_Loader
+#         super().__init__(
+#             graph=graph,
+#             indices=indices,
+#             graph_sampler=graph_sampler,
+#             batch_size=batch_size,
+#             shuffle=shuffle,
+#             drop_last=drop_last,
+#             num_workers=num_workers,
+#             use_uva=use_uva,
+#             pin_prefetcher=pin_prefetcher,
+#             use_alternate_streams=use_alternate_streams
+#         )
+
+#     def __iter__(self):
+#         if self.shuffle:
+#             self.dataset.shuffle()
+#         # When using multiprocessing PyTorch sometimes set the number of PyTorch threads to 1
+#         # when spawning new Python threads.  This drastically slows down pinning features.
+#         num_threads = torch.get_num_threads() if self.num_workers > 0 else None
+#         return _PrefetchingIter(
+#             self, super().__iter__(), GIDS_Loader=self.GIDS_Loader)
+ 
+#     def print_stats(self):
+#         self.GIDS_Loader.print_stats()
+
+#     def print_timer(self):
+#         #if(self.bam):
+#         #     print("feature aggregation time test: %f" % self.sample_time)
+#         #print("graph travel time: %f" % self.graph_travel_time)
+#         self.sample_time = 0.0
+#         self.graph_travel_time = 0.0
+
 class GIDS():
     def __init__(self, page_size=4096, off=0, cache_dim = 1024, num_ele = 300*1000*1000*1024, 
         num_ssd = 1,  ssd_list = None, cache_size = 10,  
@@ -284,7 +507,7 @@ class GIDS():
                 num_keys = 0
                 for key , v in batch[0].items():
                     if(len(v) == 0):
-                        empty_t = torch.empty((0, dim)).to(self.gids_device)
+                        empty_t = torch.empty((0, dim)).to(self.gids_device).contiguous()
                         ret_ten[key] = empty_t
                     else:
                         key_off = 0
@@ -298,7 +521,7 @@ class GIDS():
                         index_size = len(g_index)
                         index_ptr = g_index.data_ptr()
                         
-                        return_torch =  torch.zeros([index_size,dim], dtype=torch.float, device=self.gids_device)
+                        return_torch =  torch.zeros([index_size,dim], dtype=torch.float, device=self.gids_device).contiguous()
                         return_torch_list.append(return_torch.data_ptr())
                         ret_ten[key] = return_torch
                         num_keys += 1
@@ -319,8 +542,8 @@ class GIDS():
                 index_size = len(index)
                 #print(batch[0])
                 index_ptr = index.data_ptr()
-                return_torch =  torch.zeros([index_size,dim], dtype=torch.float, device=self.gids_device)
-                self.BAM_FS.read_feature(return_torch.data_ptr(), index_ptr, index_size, dim, self.cache_dim)
+                return_torch =  torch.zeros([index_size,dim], dtype=torch.float, device=self.gids_device).contiguous()
+                self.BAM_FS.read_feature(return_torch.data_ptr(), index_ptr, index_size, dim, self.cache_dim, 0)
                 self.GIDS_time += time.time() - GIDS_time_start
 
                 batch.append(return_torch)

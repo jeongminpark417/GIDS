@@ -18,6 +18,7 @@
 #include "gids_kernel.cu"
 //#include <bafs_ptr.h>
 
+
 typedef std::chrono::high_resolution_clock Clock;
 
 void GIDS_Controllers::init_GIDS_controllers(uint32_t num_ctrls, uint64_t q_depth, uint64_t num_q, 
@@ -203,7 +204,7 @@ void BAM_Feature_Store<TYPE>::read_feature_hetero(int num_iter, const std::vecto
 
   for(uint64_t i = 0;  i < num_iter; i++){
     uint64_t i_ptr = i_ptr_list[i];
-    uint64_t    i_index_ptr =  i_index_ptr_list[i];         
+    uint64_t    i_index_ptr =  i_index_ptr_list[i];  
     TYPE *tensor_ptr = (TYPE *) i_ptr;
     int64_t *index_ptr = (int64_t *)i_index_ptr;
 
@@ -247,8 +248,11 @@ void BAM_Feature_Store<TYPE>::read_feature_hetero(int num_iter, const std::vecto
   for (int i = 0; i < num_iter; i++) {
       cudaStreamDestroy(streams[i]);
   }
+  
+
   return;
 }
+
 
 
 template <typename TYPE>
@@ -485,6 +489,7 @@ PYBIND11_MODULE(BAM_Feature_Store, m) {
       .def("init_controllers", &BAM_Feature_Store<float>::init_controllers)
       .def("read_feature", &BAM_Feature_Store<float>::read_feature)
       .def("read_feature_hetero", &BAM_Feature_Store<float>::read_feature_hetero)
+
       .def("read_feature_merged_hetero", &BAM_Feature_Store<float>::read_feature_merged_hetero)
       .def("read_feature_merged", &BAM_Feature_Store<float>::read_feature_merged)
       .def("set_window_buffering", &BAM_Feature_Store<float>::set_window_buffering)
@@ -510,8 +515,10 @@ PYBIND11_MODULE(BAM_Feature_Store, m) {
       .def("init_controllers", &BAM_Feature_Store<int64_t>::init_controllers)
       .def("read_feature", &BAM_Feature_Store<int64_t>::read_feature)
       .def("read_feature_hetero", &BAM_Feature_Store<int64_t>::read_feature_hetero)
+
       .def("read_feature_merged", &BAM_Feature_Store<int64_t>::read_feature_merged)
       .def("read_feature_merged_hetero", &BAM_Feature_Store<int64_t>::read_feature_merged_hetero)
+
 
       .def("set_window_buffering", &BAM_Feature_Store<int64_t>::set_window_buffering)
       .def("cpu_backing_buffer", &BAM_Feature_Store<int64_t>::cpu_backing_buffer)

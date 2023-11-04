@@ -25,7 +25,7 @@
 
 //#define TYPE float
 struct GIDS_Controllers {
-  const char *const ctrls_paths[6] = {"/dev/libnvm1","/dev/libnvm2","/dev/libnvm3","/dev/libnvm4","/dev/libnvm5", "/dev/libnvm0"};
+  const char *const ctrls_paths[6] = {"/dev/libnvm0","/dev/libnvm1","/dev/libnvm2","/dev/libnvm3","/dev/libnvm4","/dev/libnvm5"};
   std::vector<Controller *> ctrls;
 
   uint32_t n_ctrls = 1;
