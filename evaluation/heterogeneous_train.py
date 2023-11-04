@@ -125,7 +125,7 @@ def track_acc_GIDS(g, category, args, device, label_array=None, key_offset=None)
         lr=args.learning_rate, weight_decay=args.decay
         )
 
-    warm_up_iter = 200
+    warm_up_iter = 1000
     # Setup is Done
     for epoch in tqdm.tqdm(range(args.epochs)):
         epoch_start = time.time()
@@ -140,8 +140,6 @@ def track_acc_GIDS(g, category, args, device, label_array=None, key_offset=None)
         e2e_time_start = time.time()
 
         for step, (input_nodes, seeds, blocks, ret) in enumerate(train_dataloader):
-            if(step % 10 == 0):
-                print("step: ", step)
             if(step == warm_up_iter):
                 print("warp up done")
                 train_dataloader.print_stats()

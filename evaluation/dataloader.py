@@ -47,7 +47,7 @@ class IGB260M(object):
                 emb = np.load(path, mmap_mode='r')
 
         elif self.size == 'large' or self.size == 'full':
-            path = '/mnt/nvme16/node_feat.npy'
+            path = '/mnt/nvme17/node_feat.npy'
             #path = '/mnt/raid0_2/node_feat.npy'
             if self.in_memory:
                 emb = np.memmap(path, dtype='float32', mode='r',  shape=(num_nodes,1024)).copy()
@@ -73,14 +73,14 @@ class IGB260M(object):
         elif self.size == 'large' or self.size == 'full':
             num_nodes = self.num_nodes()
             if self.num_classes == 19:
-                path = '/mnt/nvme15/IGB260M_part_2/full/processed/paper/node_label_19_extended.npy'
+                path = '/mnt/nvme16/IGB260M_part_2/full/processed/paper/node_label_19_extended.npy'
                 if(self.in_memory):
                     node_labels = np.memmap(path, dtype='float32', mode='r',  shape=(num_nodes)).copy()
                 else:
                     node_labels = np.memmap(path, dtype='float32', mode='r',  shape=(num_nodes))
                 # Actual number 227130858
             else:
-                path = '/mnt/nvme15/IGB260M_part_2/full/processed/paper/node_label_2K_extended.npy'
+                path = '/mnt/nvme16/IGB260M_part_2/full/processed/paper/node_label_2K_extended.npy'
                 
                 if(self.in_memory):
                     node_labels = np.load(path)
@@ -105,7 +105,7 @@ class IGB260M(object):
         if self.data == 'OGB':
             path = osp.join(self.dir, 'edge_index.npy')
         elif self.size == 'full':
-            path = '/mnt/nvme15/IGB260M_part_2/full/processed/paper__cites__paper/edge_index.npy'
+            path = '/mnt/nvme16/IGB260M_part_2/full/processed/paper__cites__paper/edge_index.npy'
         elif self.size == 'large':
             path = '/mnt/nvme7/large/processed/paper__cites__paper/edge_index.npy'
         
@@ -131,7 +131,7 @@ class IGB260MDGLDataset(DGLDataset):
 
         print("node edge:", node_edges)
         #cur_path = osp.join(self.dir, self.args.dataset_size, 'processed')
-        cur_path = '/mnt/nvme15/IGB260M_part_2/full/processed'
+        cur_path = '/mnt/nvme16/IGB260M_part_2/full/processed'
         edge_row_idx = torch.from_numpy(np.load(cur_path + '/paper__cites__paper/edge_index_csc_row_idx.npy'))
         edge_col_idx = torch.from_numpy(np.load(cur_path + '/paper__cites__paper/edge_index_csc_col_idx.npy'))
         edge_idx = torch.from_numpy(np.load(cur_path + '/paper__cites__paper/edge_index_csc_edge_idx.npy'))
@@ -554,7 +554,7 @@ class OGBHeteroDGLDatasetMassive(DGLDataset):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--path', type=str, default='/mnt/nvme15/IGB260M_part_2', 
+    parser.add_argument('--path', type=str, default='/mnt/nvme16/IGB260M_part_2', 
         help='path containing the datasets')
     parser.add_argument('--dataset_size', type=str, default='full',
         choices=['experimental', 'small', 'medium', 'large', 'full'], 

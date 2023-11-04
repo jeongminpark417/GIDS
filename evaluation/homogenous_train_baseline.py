@@ -84,14 +84,10 @@ def track_acc_Baseline(g, args, device, label_array=None):
         drop_last=False,
         num_workers=args.num_workers,
         use_uva=False,
-        feature_dim=dim,
         use_prefetch_thread=False,
         pin_prefetcher=False,
-        use_alternate_streams=False,
+        use_alternate_streams=False
 
-        use_uva_graph=False,    # Need to rename
-        bam=False,
-        window_buffer=False,
     )
 
     val_dataloader = dgl.dataloading.DataLoader(
@@ -122,8 +118,8 @@ def track_acc_Baseline(g, args, device, label_array=None):
         lr=args.learning_rate, weight_decay=args.decay
         )
 
-    warm_up_iter = 10
-    eval_iter = 10
+    warm_up_iter = 1000
+    eval_iter = 100
     # Setup is Done
     for epoch in tqdm.tqdm(range(args.epochs)):
         epoch_start = time.time()
@@ -137,13 +133,12 @@ def track_acc_Baseline(g, args, device, label_array=None):
         e2e_time = 0
         e2e_time_start = time.time()
 
-        for step, (input_nodes, seeds, blocks, ret) in enumerate(train_dataloader):
+        for step, (input_nodes, seeds, blocks) in enumerate(train_dataloader):
             #
             if(step % 20 == 0):
                 print("step: ", step)
             if(step == warm_up_iter):
                 print("warp up done")
-                train_dataloader.print_timer()
                 batch_input_time = 0
                 transfer_time = 0
                 train_time = 0
@@ -179,7 +174,6 @@ def track_acc_Baseline(g, args, device, label_array=None):
             if(step == warm_up_iter + eval_iter):
                 print("Performance for 100 iteration after 1000 iteration")
                 e2e_time += time.time() - e2e_time_start 
-                train_dataloader.print_timer()
                 print_times(transfer_time, train_time, e2e_time)
              
                 batch_input_time = 0
@@ -199,7 +193,7 @@ def track_acc_Baseline(g, args, device, label_array=None):
     predictions = []
     labels = []
     with torch.no_grad():
-        for _, _, blocks,_ in test_dataloader:
+        for _, _, blocks in test_dataloader:
             blocks = [block.to(device) for block in blocks]
             inputs = blocks[0].srcdata['feat']
      
