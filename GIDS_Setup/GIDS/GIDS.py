@@ -187,48 +187,6 @@ class GIDS_DGLDataLoader(torch.utils.data.DataLoader):
         self.sample_time = 0.0
         self.graph_travel_time = 0.0
 
-
-# class GIDS_DGLDataLoader(dgl.dataloading.DataLoader):
-#     def __init__(self, graph, indices, graph_sampler, batch_size, dim, GIDS_Loader, shuffle=True, drop_last=False, num_workers=0, use_uva=False, pin_prefetcher=None, use_alternate_streams=None):
-#         # Your constructor logic here
-
-#         if not graph._graph.is_pinned():
-#             graph._graph.pin_memory_()
-        
-#         self.dim = dim
-#         self.GIDS_Loader = GIDS_Loader
-#         super().__init__(
-#             graph=graph,
-#             indices=indices,
-#             graph_sampler=graph_sampler,
-#             batch_size=batch_size,
-#             shuffle=shuffle,
-#             drop_last=drop_last,
-#             num_workers=num_workers,
-#             use_uva=use_uva,
-#             pin_prefetcher=pin_prefetcher,
-#             use_alternate_streams=use_alternate_streams
-#         )
-
-#     def __iter__(self):
-#         if self.shuffle:
-#             self.dataset.shuffle()
-#         # When using multiprocessing PyTorch sometimes set the number of PyTorch threads to 1
-#         # when spawning new Python threads.  This drastically slows down pinning features.
-#         num_threads = torch.get_num_threads() if self.num_workers > 0 else None
-#         return _PrefetchingIter(
-#             self, super().__iter__(), GIDS_Loader=self.GIDS_Loader)
- 
-#     def print_stats(self):
-#         self.GIDS_Loader.print_stats()
-
-#     def print_timer(self):
-#         #if(self.bam):
-#         #     print("feature aggregation time test: %f" % self.sample_time)
-#         #print("graph travel time: %f" % self.graph_travel_time)
-#         self.sample_time = 0.0
-#         self.graph_travel_time = 0.0
-
 class GIDS():
     def __init__(self, page_size=4096, off=0, cache_dim = 1024, num_ele = 300*1000*1000*1024, 
         num_ssd = 1,  ssd_list = None, cache_size = 10,  
