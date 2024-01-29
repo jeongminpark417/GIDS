@@ -29,7 +29,8 @@ void GIDS_Controllers::init_GIDS_controllers(uint32_t num_ctrls, uint64_t q_dept
   numQueues = num_q;
 
   for (size_t i = 0; i < n_ctrls; i++) {
-    ctrls.push_back(new Controller(ctrls_paths[ssd_list[i]], nvmNamespace, cudaDevice, queueDepth, numQueues));
+ 	printf("SSD index: %i\n", ssd_list[i]);
+       	  ctrls.push_back(new Controller(ctrls_paths[ssd_list[i]], nvmNamespace, cudaDevice, queueDepth, numQueues));
   }
 }
 
@@ -61,7 +62,7 @@ void BAM_Feature_Store<TYPE>::init_controllers(GIDS_Controllers GIDS_ctrl, uint3
 
   ctrls = GIDS_ctrl.ctrls;
 
-
+  std::cout << "Ctrl sizes: " << ctrls.size() << std::endl;
   uint64_t page_size = pageSize;
   uint64_t n_pages = cache_size * 1024LL*1024/page_size;
   this -> numPages = n_pages;
@@ -77,8 +78,8 @@ void BAM_Feature_Store<TYPE>::init_controllers(GIDS_Controllers GIDS_ctrl, uint3
   this -> h_range = new range_t<TYPE>((uint64_t)0, (uint64_t)numElems, (uint64_t)read_off,
                               (uint64_t)(t_size / page_size), (uint64_t)0,
                               (uint64_t)page_size, h_pc, cudaDevice, 
-			      REPLICATE
-			      //STRIPE
+			      //REPLICATE
+			      STRIPE
 			      );
 
   
@@ -154,7 +155,6 @@ void BAM_Feature_Store<TYPE>::print_stats(){
 template <typename TYPE>
 void BAM_Feature_Store<TYPE>::read_feature(uint64_t i_ptr, uint64_t i_index_ptr,
                                      int64_t num_index, int dim, int cache_dim, uint64_t key_off = 0) {
-
 
   TYPE *tensor_ptr = (TYPE *)i_ptr;
   int64_t *index_ptr = (int64_t *)i_index_ptr;
@@ -392,17 +392,36 @@ void BAM_Feature_Store<TYPE>::read_feature_merged_hetero(int num_iter, const std
 template <typename TYPE>
 void  BAM_Feature_Store<TYPE>::store_tensor(uint64_t tensor_ptr, uint64_t num, uint64_t offset){
 
+  uint64_t s_offset = 0; 
+  
+  uint64_t total_cache_size = (pageSize * numPages);
+  uint64_t total_tensor_size = (sizeof(TYPE) * num);
+  uint64_t num_pages = total_tensor_size / pageSize;
+
+  uint32_t n_tsteps = ceil((float)(total_tensor_size)/(float)total_cache_size);  
+  printf("total iter: %llu\n", (unsigned long long) n_tsteps);
   TYPE* t_ptr = (TYPE*) tensor_ptr;
   
   page_cache_d_t* d_pc = (page_cache_d_t*) (h_pc -> d_pc_ptr);
+  size_t b_size = 128;
+  size_t g_size = (((total_tensor_size + pageSize -1) / pageSize)  + b_size - 1)/b_size;
 
-  size_t g_size = (num + 1023)/1024;
-  printf("g size: %i num: %llu\n", g_size, num);
-  write_feature_kernel<TYPE><<<g_size, 1024>>>(h_pc->pdt.d_ctrls, d_pc, a->d_array_ptr, t_ptr, 4096, offset);
-  cuda_err_chk(cudaDeviceSynchronize());
-  printf("CALLLING FLUSH\n");
-  h_pc->flush_cache();
-  cuda_err_chk(cudaDeviceSynchronize());
+  for (uint32_t cstep =0; cstep < n_tsteps; cstep++) {
+    uint64_t cpysize = std::min(total_cache_size, (total_tensor_size-s_offset));
+
+
+   // printf("first ele:%f\n", t_ptr[0]);
+    cuda_err_chk(cudaMemcpy(h_pc->pdt.base_addr, t_ptr+s_offset+offset, cpysize, cudaMemcpyHostToDevice));
+    printf("g size: %i num: %llu\n", g_size, num);
+    write_feature_kernel<TYPE><<<100, b_size>>>(h_pc->pdt.d_ctrls, d_pc, a->d_array_ptr, t_ptr, num_pages, pageSize, offset, s_offset, n_ctrls);
+    cuda_err_chk(cudaDeviceSynchronize());
+    
+  // printf("CALLLING FLUSH\n");
+  // h_pc->flush_cache();
+    //cuda_err_chk(cudaDeviceSynchronize());
+    s_offset = s_offset + cpysize; 
+
+  }
 
 }
 
@@ -456,7 +475,8 @@ uint64_t BAM_Feature_Store<TYPE>::get_array_ptr(){
 
 template <typename TYPE>
 void  BAM_Feature_Store<TYPE>::read_tensor(uint64_t num, uint64_t offset){
-  read_kernel<TYPE><<<1, 1>>>(a->d_array_ptr, num, offset);
+  printf("offset:%llu\n", (unsigned long long) offset);
+  seq_read_kernel<TYPE><<<1, 1>>>(a->d_array_ptr, num, offset);
   cuda_err_chk(cudaDeviceSynchronize());
 
 }
@@ -477,6 +497,8 @@ template <typename T>
 BAM_Feature_Store<T> create_BAM_Feature_Store() {
     return BAM_Feature_Store<T>();
 }
+
+
 
 PYBIND11_MODULE(BAM_Feature_Store, m) {
   m.doc() = "Python bindings for an example library";

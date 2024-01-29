@@ -567,7 +567,20 @@ class GIDS():
     # Utility FUnctions
     def store_tensor(self, in_ten, offset):
         num_e = len(in_ten)
-        self.BAM_FS.store_tensor(in_ten.data_ptr(),num_e,offset);
+        self.BAM_FS.store_tensor(in_ten.data_ptr(),num_e,offset)
+
+    def store_mmap_tensor(self, in_ten, offset):
+
+        #y = in_ten[:200000].copy()
+        y = in_ten.copy()
+        print(y)
+        print(y.flags)
+        # for i in range(100):
+        #     print("Tensor val: ", y[i])
+
+        num_e = len(y)
+        print("num ele: ", num_e, " ptr: ", y.ctypes.data)
+        self.BAM_FS.store_tensor(y.ctypes.data,num_e,offset)
 
     def read_tensor(self, num, offset):
         self.BAM_FS.read_tensor(num, offset)

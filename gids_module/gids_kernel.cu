@@ -116,14 +116,39 @@ __global__ void read_kernel(array_d_t<T> *dr,
      }                           
 }
 
+
+template <typename T = float>
+__global__ void seq_read_kernel(array_d_t<T> *dr,
+                                    uint64_t num, uint64_t offset) {
+    bam_ptr<T> ptr(dr);
+     if(threadIdx.x == 0 && blockIdx.x == 0){
+        for(uint64_t i = 0; i < num; i++){
+             // if(i == 0) printf("idx: %llu type size:%i \n", offset,  (int) sizeof(T));
+              T temp = ptr[i + offset];
+              //printf("read data: %llu\n",  (unsigned long long) ptr[i + offset]);
+              printf("read data: %f\n",  (float) ptr[i + offset]);
+             // printf("float read data: %f\n", temp);
+
+        }
+     }                           
+}
+
+
 template <typename T = float>
 __global__ void write_feature_kernel(Controller** ctrls, page_cache_d_t* pc, array_d_t<T> *dr, T* in_tensor_ptr,
-                                    uint64_t num, uint64_t offset) {
+                                    uint64_t num, uint64_t page_size,  uint64_t o_offset,  uint64_t s_offset, uint32_t num_ctrls) {
 
-    uint64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if(idx < num){
-      bam_ptr<T> ptr(dr);
-      ptr[idx + offset] = in_tensor_ptr[idx];
+    uint64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
+    uint32_t ctrl = (tid) % (num_ctrls);
+    uint64_t pc_idx = tid / num_ctrls;
+
+    uint32_t queue = (tid) % (ctrls[ctrl]->n_qps);
+
+    if(tid < num){
+    uint64_t start_block = ((o_offset+s_offset + pc_idx*page_size)) >> ctrls[ctrl]->d_qps[queue].block_size_log ;
+
+    uint64_t n_blocks = page_size >> ctrls[ctrl]->d_qps[queue].block_size_log; /// ctrls[ctrl].ns.lba_data_size;;
+    write_data(pc, (ctrls[ctrl]->d_qps)+(queue),start_block, n_blocks, tid);
     }
 }
 
