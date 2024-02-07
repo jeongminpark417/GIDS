@@ -388,10 +388,10 @@ class GIDS():
                         else:
                             key_off = 0
                             if(self.heterograph_map != None):
-                                if (key in self.heterograph_map):
-                                    key_off = self.heterograph_map[key]
+                                if (k in self.heterograph_map):
+                                    key_off = self.heterograph_map[k]
                                 else:
-                                    print("Cannot find key: ", key, " in the heterograph map!")
+                                    print("Cannot find key: ", k, " in the heterograph map!")
                             v = v.to(self.gids_device)
                             index_size = len(v)
                             index_size_list.append(index_size)
@@ -405,8 +405,12 @@ class GIDS():
                 self.BAM_FS.read_feature_merged_hetero(num_concurrent_iter, return_torch_list, index_ptr_list, index_size_list, dim, self.cache_dim, key_list)
 
                 return_ten = self.return_torch_buffer.pop(0)
-                return_batch = self.window_buffer.pop(0)
-                return_batch.append(return_ten)
+                return_b = self.window_buffer.pop(0)
+                if type(return_b) is tuple:
+                    return_batch = (*return_b, return_ten) 
+                else:
+                    return_batch = return_b
+                    return_batch.append(return_ten)
                 self.GIDS_time += time.time() - GIDS_time_start
 
                 cpu_access_count = self.BAM_FS.get_cpu_access_count()
@@ -442,8 +446,14 @@ class GIDS():
 
                 self.BAM_FS.read_feature_merged(num_iter, return_torch_list, index_ptr_list, index_size_list, dim, self.cache_dim)
                 return_ten = self.return_torch_buffer.pop(0)
-                return_batch = self.window_buffer.pop(0)
-                return_batch.append(return_ten)
+                return_b = self.window_buffer.pop(0)
+                if type(return_b) is tuple:
+                    return_batch = (*return_b, return_ten)
+                else:
+                    return_batch = return_b
+                    return_batch.append(return_ten)
+
+
                 self.GIDS_time += time.time() - GIDS_time_start
 
                 cpu_access_count = self.BAM_FS.get_cpu_access_count()
@@ -489,9 +499,13 @@ class GIDS():
 
                 self.BAM_FS.read_feature_hetero(num_keys, return_torch_list, index_ptr_list, index_size_list, dim, self.cache_dim, key_list)
 
-                batch.append(ret_ten)
                 self.GIDS_time += time.time() - GIDS_time_start
-                return batch
+                if type(batch) is tuple:
+                    batch2 = (*batch, ret_ten)
+                    return batch2
+                else:
+                    batch.append(ret_ten)
+                    return batch
 
             else:
                 batch = self.window_buffer.pop(0)
@@ -504,9 +518,12 @@ class GIDS():
                 self.BAM_FS.read_feature(return_torch.data_ptr(), index_ptr, index_size, dim, self.cache_dim, 0)
                 self.GIDS_time += time.time() - GIDS_time_start
 
-                batch.append(return_torch)
-
-                return batch
+                if type(batch) is tuple:
+                    batch2 = (*batch, return_torch)
+                    return batch2
+                else:
+                    batch.append(return_torch)
+                    return batch
 
 
 
