@@ -50,15 +50,18 @@ if __name__ == '__main__':
         choices=[0, 1], help='0:read only mmap_mode=r, 1:load into memory')
     parser.add_argument('--synthetic', type=int, default=0,
         choices=[0, 1], help='0:nlp-node embeddings, 1:random')
-
-        parser.add_argument('--out_path', type=str, default='./pr_full.pt', 
+    parser.add_argument('--out_path', type=str, default='./pr_full.pt', 
         help='output path for the node list')
-
-        parser.add_argument('--damp', type=float, default=0.85, 
+    parser.add_argument('--damp', type=float, default=0.85, 
         help='Damp value for the page rank algorithm')
-        parser.add_argument('--K', type=int, default=20, 
+    parser.add_argument('--K', type=int, default=20, 
         help='K value for the page rank algorithm')
-
+    parser.add_argument('--device', type=int, default=0, 
+        help='cuda device number')
+    parser.add_argument('--data', type=str, default='IGB', 
+        choices=['IGB', 'OGB'], help='Dataset type')
+    parser.add_argument('--uva_graph', type=int, default=0,help='0:non-uva, 1:uva')
+    parser.add_argument('--emb_size', type=int, default=1024)
    
 
     args = parser.parse_args()
