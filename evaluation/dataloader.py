@@ -130,14 +130,14 @@ class IGB260MDGLDataset(DGLDataset):
         node_labels = torch.from_numpy(dataset.paper_label).to(torch.long)
 
         print("node edge:", node_edges)
-        #cur_path = osp.join(self.dir, self.args.dataset_size, 'processed')
-        cur_path = '/mnt/nvme16/IGB260M_part_2/full/processed'
-        edge_row_idx = torch.from_numpy(np.load(cur_path + '/paper__cites__paper/edge_index_csc_row_idx.npy'))
-        edge_col_idx = torch.from_numpy(np.load(cur_path + '/paper__cites__paper/edge_index_csc_col_idx.npy'))
-        edge_idx = torch.from_numpy(np.load(cur_path + '/paper__cites__paper/edge_index_csc_edge_idx.npy'))
+        cur_path = osp.join(self.dir, self.args.dataset_size, 'processed')
+        # cur_path = '/mnt/nvme16/IGB260M_part_2/full/processed'
         
 #        self.graph = dgl.graph((node_edges[:, 0],node_edges[:, 1]), num_nodes=node_features.shape[0])
         if self.args.dataset_size == 'full':   
+            edge_row_idx = torch.from_numpy(np.load(cur_path + '/paper__cites__paper/edge_index_csc_row_idx.npy'))
+            edge_col_idx = torch.from_numpy(np.load(cur_path + '/paper__cites__paper/edge_index_csc_col_idx.npy'))
+            edge_idx = torch.from_numpy(np.load(cur_path + '/paper__cites__paper/edge_index_csc_edge_idx.npy'))
             self.graph = dgl.graph(('csc', (edge_col_idx,edge_row_idx,edge_idx)), num_nodes=node_features.shape[0])
             self.graph  = self.graph.formats('csc') 
         else:
