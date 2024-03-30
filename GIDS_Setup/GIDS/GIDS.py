@@ -437,11 +437,11 @@ class GIDS():
 
                 for i in range(num_iter):
                     batch = self.window_buffer[i]
-                    batch[0] = batch[0].to(self.gids_device)
-                    index_size = len(batch[0])
+                    index = batch[0].to(self.gids_device)
+                    index_size = len(index)
                     index_size_list.append(index_size)
                     return_torch =  torch.zeros([index_size,dim], dtype=torch.float, device=self.gids_device)
-                    index_ptr_list.append(batch[0].data_ptr())
+                    index_ptr_list.append(index.data_ptr())
                     return_torch_list.append(return_torch.data_ptr())
                     self.return_torch_buffer.append(return_torch)
 
