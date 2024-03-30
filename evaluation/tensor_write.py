@@ -1,3 +1,4 @@
+import math
 import argparse, datetime
 import dgl
 import sklearn.metrics
@@ -29,7 +30,7 @@ if __name__ == '__main__':
     
     #GPU Software Cache Parameters
     parser.add_argument('--page_size', type=int, default=8)
-    parser.add_argument('--offset', type=int, default=0, help='Offset for the feature data stored in the SSD') 
+    parser.add_argument('--offset', type=int, default=0, help='Offset for the feature data stored in the SSD in byte(offset should be in page size granularity)') 
     parser.add_argument('--num_ele', type=int, default=100, help='Number of elements in the dataset (Total Size / sizeof(Type)') 
     parser.add_argument('--cache_dim', type=int, default=1024)
     parser.add_argument('--num_ssd', type=int, default=1)

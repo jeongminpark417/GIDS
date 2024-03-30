@@ -1,3 +1,4 @@
+import math
 import time
 import torch
 import numpy as np
@@ -220,7 +221,7 @@ class GIDS():
 
         # Cache Parameters
         self.page_size = page_size
-        self.off = off
+        self.off = math.ceil(math.ceil(off / page_size)/num_ssd)
         self.num_ele = num_ele
         self.cache_size = cache_size
        
@@ -243,7 +244,7 @@ class GIDS():
 
         print("ssd list: ", ssd_list)
         self.GIDS_controller.init_GIDS_controllers(num_ssd, 1024, 128, self.ssd_list)
-        self.BAM_FS.init_controllers(self.GIDS_controller, page_size, off, cache_size,num_ele, num_ssd)
+        self.BAM_FS.init_controllers(self.GIDS_controller, page_size, self.off, cache_size,num_ele, num_ssd)
         
         self.GIDS_time = 0.0
         self.WB_time = 0.0

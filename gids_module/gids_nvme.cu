@@ -398,7 +398,7 @@ void  BAM_Feature_Store<TYPE>::store_tensor(uint64_t tensor_ptr, uint64_t num, u
 	page_cache_d_t* d_pc = (page_cache_d_t*) (h_pc -> d_pc_ptr);
 	size_t b_size = 128;
 	printf("num of writing node data: %llu dim: %llu\n", num, dim);
-	write_feature_kernel2<TYPE><<<num, b_size>>>(h_pc->pdt.d_ctrls, d_pc, a->d_array_ptr, t_ptr, dim,  n_ctrls);
+	write_feature_kernel2<TYPE><<<num, b_size>>>(h_pc->pdt.d_ctrls, d_pc, a->d_array_ptr, t_ptr, dim,  n_ctrls, offset/sizeof(TYPE));
 	cuda_err_chk(cudaDeviceSynchronize());
   	h_pc->flush_cache();
    	cuda_err_chk(cudaDeviceSynchronize());
@@ -453,6 +453,10 @@ void  BAM_Feature_Store<TYPE>::set_cpu_buffer(uint64_t idx_buffer, int num){
   uint64_t* idx_ptr = (uint64_t* ) idx_buffer;
   set_cpu_buffer_kernel<TYPE><<<grid,bsize>>>(d_range, idx_ptr, num, pageSize);
   cuda_err_chk(cudaDeviceSynchronize());
+// __global__ void set_cpu_buffer_data_kernel(array_d_t<T> *dr, GIDS_CPU_buffer<T> CPU_buffer, uint64_t* idx_ptr, uint64_t dim, int num) {
+  set_cpu_buffer_data_kernel<TYPE><<<(num),bsize>>>(a->d_array_ptr, CPU_buffer, idx_ptr, dim, num);
+  cuda_err_chk(cudaDeviceSynchronize());
+
   seq_flag = false;
 
 
