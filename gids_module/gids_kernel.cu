@@ -145,11 +145,25 @@ __global__ void write_feature_kernel(Controller** ctrls, page_cache_d_t* pc, arr
     uint32_t queue = (tid) % (ctrls[ctrl]->n_qps);
 
     if(tid < num){
-    uint64_t start_block = ((o_offset+s_offset + pc_idx*page_size)) >> ctrls[ctrl]->d_qps[queue].block_size_log ;
+    	uint64_t start_block = ((o_offset+s_offset + pc_idx*page_size)) >> ctrls[ctrl]->d_qps[queue].block_size_log ;
 
-    uint64_t n_blocks = page_size >> ctrls[ctrl]->d_qps[queue].block_size_log; /// ctrls[ctrl].ns.lba_data_size;;
-    write_data(pc, (ctrls[ctrl]->d_qps)+(queue),start_block, n_blocks, tid);
+    	uint64_t n_blocks = page_size >> ctrls[ctrl]->d_qps[queue].block_size_log; /// ctrls[ctrl].ns.lba_data_size;;
+    	write_data(pc, (ctrls[ctrl]->d_qps)+(queue),start_block, n_blocks, tid);
     }
 }
+
+template <typename T = float>
+__global__ void write_feature_kernel2(Controller** ctrls, page_cache_d_t* pc, array_d_t<T> *dr, T* in_tensor_ptr, uint64_t dim, uint32_t num_ctrls) {
+
+
+	bam_ptr<T> ptr(dr);
+	uint64_t row_index = blockIdx.x;
+
+	for(int i = threadIdx.x; i < dim; i += blockDim.x){
+		ptr[(row_index) * dim + i] = in_tensor_ptr[(row_index) * dim + i];
+	}
+}
+
+
 
 

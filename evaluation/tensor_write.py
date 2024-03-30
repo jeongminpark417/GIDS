@@ -21,7 +21,6 @@ from ogb.nodeproppred import DglNodePropPredDataset, Evaluator
 
 
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # Loading dataset
@@ -40,11 +39,16 @@ if __name__ == '__main__':
 
 
     parser.add_argument('--mmap', type=int, default=0) 
+    parser.add_argument('--device', type=int, default=0)
 
     args = parser.parse_args()
+    device = f'cuda:' + str(args.device) if torch.cuda.is_available() else 'cpu'
+
     gids_ssd_list = None
     if (args.ssd_list != None):
         gids_ssd_list =  [int(ssd_list) for ssd_list in args.ssd_list.split(',')]
+
+    print("GIDS SSD List: ", gids_ssd_list)
 
     GIDS_Loader = GIDS.GIDS(
         page_size = args.page_size,
@@ -57,8 +61,8 @@ if __name__ == '__main__':
     )
 
     emb = np.load(args.path)
-
-    GIDS_Loader.store_tensor(emb, 0)
+    emb_tensor = torch.tensor(emb).to(device)
+    GIDS_Loader.store_tensor(emb_tensor, 0)
 
 
 

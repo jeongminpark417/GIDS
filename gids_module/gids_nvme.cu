@@ -392,6 +392,17 @@ void BAM_Feature_Store<TYPE>::read_feature_merged_hetero(int num_iter, const std
 template <typename TYPE>
 void  BAM_Feature_Store<TYPE>::store_tensor(uint64_t tensor_ptr, uint64_t num, uint64_t offset){
 
+
+//__global__ void write_feature_kernel2(Controller** ctrls, page_cache_d_t* pc, array_d_t<T> *dr, T* in_tensor_ptr, uint64_t dim, uint32_t num_ctrls) {
+	TYPE* t_ptr = (TYPE*) tensor_ptr;
+	page_cache_d_t* d_pc = (page_cache_d_t*) (h_pc -> d_pc_ptr);
+	size_t b_size = 128;
+	printf("num of writing node data: %llu dim: %llu\n", num, dim);
+	write_feature_kernel2<TYPE><<<num, b_size>>>(h_pc->pdt.d_ctrls, d_pc, a->d_array_ptr, t_ptr, dim,  n_ctrls);
+	cuda_err_chk(cudaDeviceSynchronize());
+  	h_pc->flush_cache();
+   	cuda_err_chk(cudaDeviceSynchronize());
+/*
   uint64_t s_offset = 0; 
   
   uint64_t total_cache_size = (pageSize * numPages);
@@ -422,7 +433,7 @@ void  BAM_Feature_Store<TYPE>::store_tensor(uint64_t tensor_ptr, uint64_t num, u
     s_offset = s_offset + cpysize; 
 
   }
-
+*/
 }
 
 

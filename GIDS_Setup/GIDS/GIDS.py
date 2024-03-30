@@ -241,6 +241,7 @@ class GIDS():
         else:
             self.ssd_list = ssd_list
 
+        print("ssd list: ", ssd_list)
         self.GIDS_controller.init_GIDS_controllers(num_ssd, 1024, 128, self.ssd_list)
         self.BAM_FS.init_controllers(self.GIDS_controller, page_size, off, cache_size,num_ele, num_ssd)
         
