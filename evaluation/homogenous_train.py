@@ -196,8 +196,9 @@ def track_acc_GIDS(g, args, device, label_array=None):
             if(args.data == 'IGB'):
                 labels.append(blocks[-1].dstdata['label'].cpu().numpy())
             elif(args.data == 'OGB'):
-                out_label = torch.index_select(label_array, 0, b[1]).flatten()
-                labels.append(out_label.numpy())
+                labels.append(blocks[-1].dstdata['label'].cpu().numpy())
+                # out_label = torch.index_select(label_array, 0, b[1]).flatten()
+                # labels.append(out_label.numpy())
             predict = model(blocks, inputs).argmax(1).cpu().numpy()
             predictions.append(predict)
 
