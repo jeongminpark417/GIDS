@@ -49,10 +49,10 @@ Once the BaM system is set up, users can create the Python module for the GIDS d
 
 ``` 
 cd gids_module
-mkdir build
+mkdir build && cd build
 cmake .. && make -j
 cd BAM_Feature_Store
-python setup install
+python setup.py install
 ```
 If cmake cannot automatically find the path for the installed libraries, try
 ```
