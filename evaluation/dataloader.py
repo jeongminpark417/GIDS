@@ -2,11 +2,30 @@ import argparse, time
 import numpy as np
 import torch
 import os.path as osp
+import pandas as pd
 
 import dgl
 from dgl.data import DGLDataset
 import warnings
 warnings.filterwarnings("ignore")
+
+
+def _idx_to_mask(indices, total_samples):
+        mask = torch.zeros(total_samples, dtype=torch.bool)
+        mask[indices] = True
+        return mask
+
+def ogb_get_idx_split_mask(path, n):
+    train_idx = pd.read_csv(osp.join(path, 'train.csv.gz'), compression='gzip', header = None).values.T[0]
+    valid_idx = pd.read_csv(osp.join(path, 'valid.csv.gz'), compression='gzip', header = None).values.T[0]
+    test_idx = pd.read_csv(osp.join(path, 'test.csv.gz'), compression='gzip', header = None).values.T[0]
+
+    train_mask = _idx_to_mask(train_idx, n)
+    valid_mask = _idx_to_mask(valid_idx, n)
+    test_mask = _idx_to_mask(test_idx, n)
+
+    return train_mask, valid_mask, test_mask
+
 
 class IGB260M(object):
     def __init__(self, root: str, size: str, in_memory: int, uva_graph: int,  \
@@ -67,9 +86,11 @@ class IGB260M(object):
 
     @property
     def paper_label(self) -> np.ndarray:
-
         if(self.data == 'OGB'):
-            return np.random.randint(low=0, size=111059956, high=171)
+            path = osp.join(self.dir, 'node_label.npy')
+            node_labels = np.load(path).flatten()
+            return node_labels
+
         elif self.size == 'large' or self.size == 'full':
             num_nodes = self.num_nodes()
             if self.num_classes == 19:
@@ -200,7 +221,7 @@ class OGBDGLDataset(DGLDataset):
     def __init__(self, args):
         self.dir = args.path
         self.args = args
-        super().__init__(name='IGB260MDGLDataset')
+        super().__init__(name='IGB260M')
 
     def process(self):
         dataset = IGB260M(root=self.dir, size=self.args.dataset_size, in_memory=self.args.in_memory, uva_graph=self.args.uva_graph, \
@@ -223,13 +244,17 @@ class OGBDGLDataset(DGLDataset):
         n_train = int(n_nodes * 0.6)
         n_val   = int(n_nodes * 0.2)
             
-        train_mask = torch.zeros(n_nodes, dtype=torch.bool)
-        val_mask = torch.zeros(n_nodes, dtype=torch.bool)
-        test_mask = torch.zeros(n_nodes, dtype=torch.bool)
+        split_path = osp.join(self.dir,'../split', 'time')
+        print("split path: ", split_path)
+        train_mask, val_mask, test_mask = ogb_get_idx_split_mask(split_path, n_nodes)
+
+        #train_mask = torch.zeros(n_nodes, dtype=torch.bool)
+        #val_mask = torch.zeros(n_nodes, dtype=torch.bool)
+        #test_mask = torch.zeros(n_nodes, dtype=torch.bool)
             
-        train_mask[:n_train] = True
-        val_mask[n_train:n_train + n_val] = True
-        test_mask[n_train + n_val:] = True
+        #train_mask[:n_train] = True
+        #val_mask[n_train:n_train + n_val] = True
+        #test_mask[n_train + n_val:] = True
             
         self.graph.ndata['train_mask'] = train_mask
         self.graph.ndata['val_mask'] = val_mask
