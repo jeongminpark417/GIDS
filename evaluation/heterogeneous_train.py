@@ -288,6 +288,13 @@ if __name__ == '__main__':
                     'fos' : 546567057,
                     'institute' : 547280017
                 }
+            if(args.dataset_size == 'large'):
+                key_offset = {
+                    'paper' : 0,
+                    'author' : 100000000,
+                    'fos' : 216959896,
+                    'institute' : 217609603
+                }    
         else:
             dataset = IGBHeteroDGLDataset(args)
         g = dataset[0]

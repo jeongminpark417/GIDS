@@ -413,16 +413,16 @@ class IGBHeteroDGLDatasetMassive(DGLDataset):
           
         elif self.args.dataset_size == "large":
             num_paper_nodes = 100000000
-            paper_node_features = torch.from_numpy(np.memmap(osp.join(self.dir, "full", 'processed', 
+            paper_node_features = torch.from_numpy(np.memmap(osp.join(self.dir, "large", 'processed', 
             'paper', 'node_feat.npy'), dtype='float32', mode='r',  shape=(num_paper_nodes,1024)))
             if self.args.num_classes == 19:
-                paper_node_labels = torch.from_numpy(np.memmap(osp.join(self.dir, "full", 'processed', 
+                paper_node_labels = torch.from_numpy(np.memmap(osp.join(self.dir, "large", 'processed', 
                 'paper', 'node_label_19.npy'), dtype='float32', mode='r',  shape=(num_paper_nodes))).to(torch.long)
             elif self.args.num_classes == 2983:
-                paper_node_labels = torch.from_numpy(np.memmap(osp.join(self.dir, "full", 'processed', 
+                paper_node_labels = torch.from_numpy(np.memmap(osp.join(self.dir, "large", 'processed', 
                 'paper', 'node_label_2K.npy'), dtype='float32', mode='r',  shape=(num_paper_nodes))).to(torch.long)
             num_author_nodes = 116959896
-            author_node_features = torch.from_numpy(np.memmap(osp.join(self.dir, "full", 'processed', 
+            author_node_features = torch.from_numpy(np.memmap(osp.join(self.dir, "large", 'processed', 
             'author', 'node_feat.npy'), dtype='float32', mode='r',  shape=(num_author_nodes,1024)))
 
         institute_node_features = torch.from_numpy(np.load(osp.join(self.dir, self.args.dataset_size, 'processed', 
