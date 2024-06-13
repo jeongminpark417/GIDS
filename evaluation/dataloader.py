@@ -88,8 +88,10 @@ class IGB260M(object):
     def paper_label(self) -> np.ndarray:
         if(self.data == 'OGB'):
             path = osp.join(self.dir, 'node_label.npy')
-            node_labels = np.load(path).flatten()
-            return node_labels
+            if self.in_memory:
+                node_labels = np.load(path).flatten()
+            else:
+                node_labels = np.load(path, mmap_mode='r').flatten()
 
         elif self.size == 'large' or self.size == 'full':
             num_nodes = self.num_nodes()

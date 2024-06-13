@@ -348,7 +348,10 @@ class GIDS():
             if(len(self.return_torch_buffer) != 0):
                 return_ten = self.return_torch_buffer.pop(0)
                 return_batch = self.window_buffer.pop(0)
-                return_batch.append(return_ten)
+                if type(return_batch) is tuple:
+                    return_batch = (*return_batch, return_ten)
+                else:
+                    return_batch.append(return_ten)
                 self.GIDS_time += time.time() - GIDS_time_start
                 return return_batch
 

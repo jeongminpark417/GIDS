@@ -174,10 +174,9 @@ def track_acc_Baseline(g, category, args, device, label_array=None):
             inputs = blocks[0].srcdata['feat']
      
             if(args.data == 'IGB'):
-                labels.append(blocks[-1].dstdata['label'].cpu().numpy())
+                labels.append(blocks[-1].dstdata['label']['paper'].cpu().numpy())
             elif(args.data == 'OGB'):
-                out_label = torch.index_select(label_array, 0, b[1]).flatten()
-                labels.append(out_label.numpy())
+                labels.append(blocks[-1].dstdata['label']['paper'].cpu().numpy())
             predict = model(blocks, inputs).argmax(1).cpu().numpy()
             predictions.append(predict)
 

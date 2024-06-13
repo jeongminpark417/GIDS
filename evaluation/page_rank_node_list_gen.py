@@ -161,8 +161,8 @@ if __name__ == '__main__':
         key_offset = {
                     'paper' : 0,
                     'author' : 1000000,
-                    'fos' : 1000000 + 192606,
-                    'institute' : 1000000 + 192606 + 190449
+                    'fos' : 1000000 + 1926066,
+                    'institute' : 1000000 + 1926066 + 190449
                 }
 
         pv = compute_pagerank_hetero(g, args.damp, args.K, key_offset) 
