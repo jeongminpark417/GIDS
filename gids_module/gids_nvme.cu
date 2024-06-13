@@ -41,7 +41,7 @@ void BAM_Feature_Store<TYPE>::cpu_backing_buffer(uint64_t dim, uint64_t len){
   TYPE* d_cpu_buffer_ptr;
 
   cuda_err_chk(cudaHostAlloc((TYPE **)&cpu_buffer_ptr, sizeof(TYPE) * dim * len, cudaHostAllocMapped));
-  cudaHostGetDevicePointer((TYPE **)&d_cpu_buffer_ptr, (TYPE *)cpu_buffer_ptr, 0);
+  cuda_err_chk(cudaHostGetDevicePointer((TYPE **)&d_cpu_buffer_ptr, (TYPE *)cpu_buffer_ptr, 0));
 
   CPU_buffer.cpu_buffer_dim = dim;
   CPU_buffer.cpu_buffer_len = len;
@@ -453,8 +453,8 @@ void  BAM_Feature_Store<TYPE>::set_cpu_buffer(uint64_t idx_buffer, int num){
   uint64_t* idx_ptr = (uint64_t* ) idx_buffer;
   set_cpu_buffer_kernel<TYPE><<<grid,bsize>>>(d_range, idx_ptr, num, pageSize);
   cuda_err_chk(cudaDeviceSynchronize());
-// __global__ void set_cpu_buffer_data_kernel(array_d_t<T> *dr, GIDS_CPU_buffer<T> CPU_buffer, uint64_t* idx_ptr, uint64_t dim, int num) {
-  set_cpu_buffer_data_kernel<TYPE><<<(num),bsize>>>(a->d_array_ptr, CPU_buffer, idx_ptr, dim, num);
+  
+  set_cpu_buffer_data_kernel<TYPE><<<num,32>>>(a->d_array_ptr, CPU_buffer.device_cpu_buffer, idx_ptr, dim, num);
   cuda_err_chk(cudaDeviceSynchronize());
 
   seq_flag = false;

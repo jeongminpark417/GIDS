@@ -83,7 +83,7 @@ __global__ void read_feature_kernel_with_cpu_backing_memory(array_d_t<T> *dr, ra
 
 template <typename T = float>
 __global__ void set_cpu_buffer_kernel(range_d_t<T> *d_range, uint64_t* idx_ptr, int num, uint32_t pageSize) {
-  
+
   uint32_t idx = threadIdx.x + blockIdx.x * blockDim.x;
   if(idx <  num){
     d_range -> set_cpu_buffer(idx_ptr[idx], idx );
@@ -92,17 +92,17 @@ __global__ void set_cpu_buffer_kernel(range_d_t<T> *d_range, uint64_t* idx_ptr, 
 }
 
 template <typename T = float>
-__global__ void set_cpu_buffer_data_kernel(array_d_t<T> *dr, GIDS_CPU_buffer<T> CPU_buffer, uint64_t* idx_ptr, uint64_t dim, int num) {
-
+__global__ void set_cpu_buffer_data_kernel(array_d_t<T> *dr, T* CPU_buffer, uint64_t* idx_ptr, uint64_t dim, int num) {
 	uint64_t bid = blockIdx.x;
 	bam_ptr<T> ptr(dr);
 	if(bid <  num){
 		uint64_t idx = idx_ptr[bid];
+		
 		for(uint64_t i  = threadIdx.x; i < dim; i += blockDim.x){
-			CPU_buffer.device_cpu_buffer[idx * dim + i] = ptr[idx * dim + i];
+			CPU_buffer[bid * dim + i] = ptr[idx * dim + i];
 		}
-
 	}
+
 }
 
 
