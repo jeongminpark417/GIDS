@@ -3,6 +3,7 @@ import torch.nn.functional as F
 from dgl import apply_each
 from dgl.nn.pytorch import GATConv, GraphConv, SAGEConv, HeteroGraphConv
 
+
 class SAGE(nn.Module):
     def __init__(self, in_feats, h_feats, num_classes, num_layers=2, dropout=0.2):
         super(SAGE, self).__init__()
@@ -148,4 +149,4 @@ class RGAT(nn.Module):
                 h = apply_each(h, self.dropout)
         return self.linear(h['paper'])   
 
-      
+
