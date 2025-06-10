@@ -1,13 +1,15 @@
-import argparse, datetime
-import dgl
 import sklearn.metrics
+
+import dgl
 import torch, torch.nn as nn, torch.optim as optim
 import time, tqdm, numpy as np
 from models import *
+from mlperf_model import RGNN
 from dataloader import IGB260MDGLDataset, OGBDGLDataset
 from dataloader import IGBHeteroDGLDataset, IGBHeteroDGLDatasetMassive, OGBHeteroDGLDatasetMassive
 
 import csv 
+import argparse, datetime
 import warnings
 
 import torch.cuda.nvtx as t_nvtx
@@ -37,7 +39,7 @@ def print_times(transfer_time, train_time, e2e_time):
     print("e2e time: ", e2e_time)
 
 
-def track_acc_GIDS(g, category, args, device, label_array=None, key_offset=None):
+def track_acc_GIDS(g, category, args, device, dim , label_array=None, key_offset=None):
 
     GIDS_Loader = None
     GIDS_Loader = GIDS.GIDS(
@@ -79,7 +81,7 @@ def track_acc_GIDS(g, category, args, device, label_array=None, key_offset=None)
     val_nid = torch.nonzero(g.nodes[category].data['val_mask'], as_tuple=True)[0]
     test_nid = torch.nonzero(g.nodes[category].data['test_mask'], as_tuple=True)[0]
     
-    in_feats = g.ndata['feat'][category].shape[1]
+    in_feats = dim
 
     if args.model_type == 'rgcn':
         model = RGCN(g.etypes, in_feats, args.hidden_channels,
@@ -88,8 +90,18 @@ def track_acc_GIDS(g, category, args, device, label_array=None, key_offset=None)
         model = RSAGE(g.etypes, in_feats, args.hidden_channels,
             args.num_classes, args.num_layers).to(device)
     if args.model_type == 'rgat':
-        model = RGAT(g.etypes, in_feats, args.hidden_channels,
-            args.num_classes, args.num_layers, args.num_heads).to(device)
+        # model = RGAT(g.etypes, in_feats, args.hidden_channels,
+        #     args.num_classes, args.num_layers, 0.2, args.num_heads).to(device)
+
+         model = RGNN(g.etypes,
+               in_feats,
+               args.hidden_channels,
+               args.num_classes,
+               num_layers=args.num_layers,
+               dropout=0.2,
+               model='rgat',
+               heads=args.num_heads,
+               node_type='paper').to(device)
 
 
     #train_dataloader = dgl.dataloading.DataLoader(
@@ -112,20 +124,36 @@ def track_acc_GIDS(g, category, args, device, label_array=None, key_offset=None)
         shuffle=False, drop_last=False,
         num_workers=args.num_workers)
 
-    test_dataloader = dgl.dataloading.DataLoader(
-        g, {category: test_nid}, sampler,
-        batch_size=args.batch_size,
-        shuffle=True, drop_last=False,
-        num_workers=args.num_workers)
+
+    test_dataloader =  GIDS_DGLDataLoader(
+        g,
+        {category: test_nid},
+        sampler,
+        args.batch_size,
+        dim,
+        GIDS_Loader,
+        shuffle=True,
+        drop_last=False,
+        num_workers=args.num_workers,
+        use_alternate_streams=False
+    )
+
+
+    # test_dataloader = dgl.dataloading.DataLoader(
+    #     g, {category: test_nid}, sampler,
+    #     batch_size=args.batch_size,
+    #     shuffle=True, drop_last=False,
+    #     num_workers=args.num_workers)
 
 
     loss_fcn = nn.CrossEntropyLoss().to(device)
     optimizer = optim.Adam(
         model.parameters(), 
-        lr=args.learning_rate, weight_decay=args.decay
+        lr=args.learning_rate
+        #, weight_decay=args.decay
         )
 
-    warm_up_iter = 1000
+    warm_up_iter = 35000
     # Setup is Done
     for epoch in tqdm.tqdm(range(args.epochs)):
         epoch_start = time.time()
@@ -140,6 +168,14 @@ def track_acc_GIDS(g, category, args, device, label_array=None, key_offset=None)
         e2e_time_start = time.time()
 
         for step, (input_nodes, seeds, blocks, ret) in enumerate(train_dataloader):
+
+    
+            # p = blocks[0].srcdata[dgl.NID]['paper'].cpu()
+            # a = blocks[0].srcdata[dgl.NID]['author'].cpu()
+            # print(f"paper node: {p} author node:{a} emb: {ret}")
+            # p_orig_feat = g.ndata['feat']['paper'][p]
+            # print(f"paper feat: {p_orig_feat}")
+           
             if(step == warm_up_iter):
                 print("warp up done")
                 train_dataloader.print_stats()
@@ -184,11 +220,64 @@ def track_acc_GIDS(g, category, args, device, label_array=None, key_offset=None)
                 e2e_time = 0
                 
                 #Just testing 100 iterations remove the next line if you do not want to halt
-                return None
+                #break
+         
+
+            if (step % 5000 == 0):
+                train_acc =sklearn.metrics.accuracy_score(batch_labels.cpu().numpy(),
+                  batch_pred.argmax(1).detach().cpu().numpy())*100
+                print(f"Step {step}, Loss: {loss.item():.4f}, Train Acc: {train_acc:.2f}%")
+
+
+
 
 
        
-  
+    model.eval()
+    predictions = []
+    labels = []
+    counter = 0
+    eval_acc = 0
+    with torch.no_grad():
+        #for _, _, blocks in test_dataloader:
+        for step, (input_nodes, seeds, blocks, ret) in enumerate(test_dataloader):
+
+            
+            # blocks = [block.to(device) for block in blocks]
+            # inputs = blocks[0].srcdata['feat']
+     
+            batch_labels = (blocks[-1].dstdata['label']['paper']).to(device) 
+            batch_inputs = ret
+
+            blocks = [block.int().to(device) for block in blocks]
+ 
+
+            if(args.data == 'IGB'):
+                labels.append(blocks[-1].dstdata['label']['paper'].cpu().numpy())
+            elif(args.data == 'OGB'):
+                out_label = torch.index_select(label_array, 0, b[1]).flatten()
+                labels.append(out_label.numpy())
+            #predict = model(blocks, inputs).argmax(1).cpu().numpy()
+            predict = model(blocks, batch_inputs)
+            #predictions.append(predict)
+
+            train_acc = sklearn.metrics.accuracy_score(batch_labels.cpu().numpy(),
+                  predict.argmax(1).detach().cpu().numpy())*100
+            eval_acc += train_acc
+            if(counter % 5000 == 0):
+                print(f"Step {step}, Eval Acc: {train_acc:.2f}%")
+
+            counter += 1
+            # if(counter == 4000):
+            #     break
+
+        # predictions = np.concatenate(predictions)
+        # labels = np.concatenate(labels)
+        # test_acc = sklearn.metrics.accuracy_score(labels, predictions)*100
+
+        test_acc = eval_acc/counter
+    print("Test Acc {:.2f}%".format(test_acc))
+
 
 
 
@@ -222,10 +311,10 @@ if __name__ == '__main__':
     parser.add_argument('--fan_out', type=str, default='10,15')
     parser.add_argument('--batch_size', type=int, default=1024)
     parser.add_argument('--num_workers', type=int, default=0)
-    parser.add_argument('--hidden_channels', type=int, default=128)
-    parser.add_argument('--learning_rate', type=float, default=0.01)
+    parser.add_argument('--hidden_channels', type=int, default=512)
+    parser.add_argument('--learning_rate', type=float, default=0.001)
     parser.add_argument('--decay', type=float, default=0.001)
-    parser.add_argument('--epochs', type=int, default=3)
+    parser.add_argument('--epochs', type=int, default=1)
     parser.add_argument('--num_layers', type=int, default=6)
     parser.add_argument('--num_heads', type=int, default=4)
     parser.add_argument('--log_every', type=int, default=2)
@@ -274,22 +363,33 @@ if __name__ == '__main__':
 
     labels = None
     key_offset = None
-
+    dim = 1024
     device = f'cuda:' + str(args.device) if torch.cuda.is_available() else 'cpu'
     if(args.data == 'IGB'):
+        dim = 1024
         print("Dataset: IGB")
         if(args.dataset_size == 'full' or args.dataset_size == 'large'):
             dataset = IGBHeteroDGLDatasetMassive(args)
             # User need to fill this out for their dataset based how it is stored in SSD
             if(args.dataset_size == 'full'):
                 key_offset = {
-                    'paper' : 0,
-                    'author' : 269346174,
+                    'author' : 0,
+                    'paper' : 277220883,
                     'fos' : 546567057,
-                    'institute' : 547280017
+                    'institute' : 547280017,
+                    'journal' : 546593975,
+                    'conference' : 546643027
                 }
         else:
             dataset = IGBHeteroDGLDataset(args)
+            if(args.dataset_size == 'small'):
+                key_offset = {
+                    'paper' : 0,
+                    'author' : 1000000,
+                    'fos' : 2926066,
+                    'institute' : 3116515
+                }
+
         g = dataset[0]
         g = g.formats('csc')
     elif(args.data == "OGB"):
@@ -309,7 +409,8 @@ if __name__ == '__main__':
 
 
     category = g.predict
-    track_acc_GIDS(g, category, args, device, labels, key_offset)
+    print(f"GIDS trainign start key pffset: {key_offset}")
+    track_acc_GIDS(g, category, args, device, dim, labels, key_offset)
     #track_acc(g, args, device, labels)
 
 
