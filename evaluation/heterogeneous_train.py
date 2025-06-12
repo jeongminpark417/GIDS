@@ -223,11 +223,13 @@ def track_acc_GIDS(g, category, args, device, dim , label_array=None, key_offset
                 #break
          
 
-            if (step % 5000 == 0):
+            if (step % 1000 == 0):
                 train_acc =sklearn.metrics.accuracy_score(batch_labels.cpu().numpy(),
                   batch_pred.argmax(1).detach().cpu().numpy())*100
                 print(f"Step {step}, Loss: {loss.item():.4f}, Train Acc: {train_acc:.2f}%")
 
+            # if(step == 5000):
+            #     break
 
 
 
@@ -264,12 +266,14 @@ def track_acc_GIDS(g, category, args, device, dim , label_array=None, key_offset
             train_acc = sklearn.metrics.accuracy_score(batch_labels.cpu().numpy(),
                   predict.argmax(1).detach().cpu().numpy())*100
             eval_acc += train_acc
-            if(counter % 5000 == 0):
+            if(counter % 1000 == 0):
                 print(f"Step {step}, Eval Acc: {train_acc:.2f}%")
 
-            counter += 1
-            # if(counter == 4000):
+            # if(counter == 5000):
             #     break
+
+            counter += 1
+    
 
         # predictions = np.concatenate(predictions)
         # labels = np.concatenate(labels)
@@ -290,7 +294,7 @@ if __name__ == '__main__':
     parser.add_argument('--path', type=str, default='/mnt/nvme14/IGB260M', 
         help='path containing the datasets')
     parser.add_argument('--dataset_size', type=str, default='experimental',
-        choices=['experimental', 'small', 'medium', 'large', 'full'], 
+        choices=['tiny', 'small', 'medium', 'large', 'full'], 
         help='size of the datasets')
     parser.add_argument('--num_classes', type=int, default=19, 
         choices=[19, 2983, 172, 348,349, 350, 153, 152], help='number of classes')
@@ -373,22 +377,54 @@ if __name__ == '__main__':
             # User need to fill this out for their dataset based how it is stored in SSD
             if(args.dataset_size == 'full'):
                 key_offset = {
-                    'author' : 0,
-                    'paper' : 277220883,
+                    'paper' : 0,
+                    'author' : 269346174,
                     'fos' : 546567057,
                     'institute' : 547280017,
                     'journal' : 546593975,
                     'conference' : 546643027
                 }
+            else:
+                key_offset = {
+                    'paper' : 0,
+                    'author' : 100000000,
+                    'fos' : 100000000 + 116959896,
+                    'institute' : 100000000 + 116959896 + 649707,
+                    'journal' : 100000000 + 116959896 + 649707 + 26524,
+                    'conference' : 100000000 + 116959896 + 649707 + 26524 + 48820
+                }
+
         else:
             dataset = IGBHeteroDGLDataset(args)
             if(args.dataset_size == 'small'):
                 key_offset = {
                     'paper' : 0,
                     'author' : 1000000,
-                    'fos' : 2926066,
-                    'institute' : 3116515
+                    'fos' : 1000000 + 192606,
+                    'institute' : 1000000 + 192606 + 190449,
+                    # 'journal' : 1000000 + 192606 + 190449 + 14751,
+                    # 'conference' : 1000000 + 192606 + 190449 + 14751 + 15277
                 }
+            elif(args.dataset_size == 'medium'):
+                key_offset = {
+                    'paper' : 0,
+                    'author' : 10000000,
+                    'fos' : 10000000 + 15544654,
+                    'institute' : 10000000 + 15544654 + 415054,
+                    # 'journal' : 10000000 + 15544654 + 415054 + 23256,
+                    # 'conference' : 10000000 + 15544654 + 415054 + 23256 + 37565
+                }
+            elif(args.dataset_size == 'tiny'):
+                key_offset = {
+                    'paper' : 0,
+                    'author' : 100000,
+                    'fos' : 100000 + 357041,
+                    'institute' : 100000 + 357041 + 84220
+                }
+            else:
+                key_offset = None
+                print("key_offset is not set")
+                exit()
 
         g = dataset[0]
         g = g.formats('csc')

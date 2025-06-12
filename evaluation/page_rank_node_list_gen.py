@@ -1,6 +1,8 @@
-import argparse, datetime
-import dgl
 import sklearn.metrics
+
+import dgl
+import argparse, datetime
+
 import torch, torch.nn as nn, torch.optim as optim
 import time, tqdm, numpy as np
 from models import *
@@ -8,12 +10,6 @@ from dataloader import IGB260MDGLDataset, OGBDGLDataset, IGBHeteroDGLDataset, IG
 import csv 
 import warnings
 
-import torch.cuda.nvtx as t_nvtx
-import nvtx
-import threading
-import gc
-
-import GIDS
 
 from ogb.graphproppred import DglGraphPropPredDataset
 from ogb.nodeproppred import DglNodePropPredDataset, Evaluator
@@ -88,7 +84,7 @@ if __name__ == '__main__':
     parser.add_argument('--path', type=str, default='/mnt/nvme14/IGB260M', 
         help='path containing the datasets')
     parser.add_argument('--dataset_size', type=str, default='experimental',
-        choices=['experimental', 'small', 'medium', 'large', 'full'], 
+        choices=['tiny', 'small', 'medium', 'large', 'full'], 
         help='size of the datasets')
     parser.add_argument('--num_classes', type=int, default=19, 
         choices=[19, 2983, 171,172, 173], help='number of classes')
@@ -117,6 +113,7 @@ if __name__ == '__main__':
     labels = None
     device = f'cuda:' + str(args.device) if torch.cuda.is_available() else 'cpu'
     
+
 
     if(args.hetero):
         if(args.data == 'IGB'):
@@ -158,12 +155,59 @@ if __name__ == '__main__':
     if(args.hetero):
         print("heterogeneous graph")
 
-        key_offset = {
-                    'paper' : 0,
-                    'author' : 1000000,
-                    'fos' : 1000000 + 192606,
-                    'institute' : 1000000 + 192606 + 190449
-                }
+        print("g.number_of_nodes(): ", g.number_of_nodes()) 
+        if(args.dataset_size == 'full'):
+            print("full dataset")
+            key_offset = {
+                'paper' : 0,
+                'author' : 269346174,
+                'fos' : 546567057,
+                'institute' : 547280017,
+                'journal' : 546593975,
+                'conference' : 546643027
+            }
+        elif(args.dataset_size == 'large'):
+            print("large dataset")
+            key_offset = {
+                'paper' : 0,
+                'author' : 100000000,
+                'fos' : 100000000 + 116959896,
+                'institute' : 100000000 + 116959896 + 649707,
+                'journal' : 100000000 + 116959896 + 649707 + 26524,
+                'conference' : 100000000 + 116959896 + 649707 + 26524 + 48820
+            }
+        elif(args.dataset_size == 'medium'):
+            print("medium dataset")
+            key_offset = {
+                'paper' : 0,
+                'author' : 10000000,
+                'fos' : 10000000 + 15544654,
+                'institute' : 10000000 + 15544654 + 415054,
+                # 'journal' : 10000000 + 15544654 + 415054 + 23256,
+                # 'conference' : 10000000 + 15544654 + 415054 + 23256 + 37565
+            }
+        elif(args.dataset_size == 'small'):
+            print("small dataset")
+            key_offset = {
+                'paper' : 0,
+                'author' : 1000000,
+                'fos' : 1000000 + 192606,
+                'institute' : 1000000 + 192606 + 190449,
+                # 'journal' : 1000000 + 192606 + 190449 + 14751,
+                # 'conference' : 1000000 + 192606 + 190449 + 14751 + 15277
+            }
+        elif(args.dataset_size == 'tiny'):
+            print("tiny dataset")
+            key_offset = {
+                'paper' : 0,
+                'author' : 100000,
+                'fos' : 100000 + 357041,
+                'institute' : 100000 + 357041 + 84220
+            }
+        else:
+            key_offset = None
+            print("key_offset is not set")
+            exit()
 
         pv = compute_pagerank_hetero(g, args.damp, args.K, key_offset) 
         N = len(pv)
