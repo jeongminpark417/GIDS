@@ -10,15 +10,18 @@ __global__ void read_feature_kernel(array_d_t<T> *dr, T *out_tensor_ptr,
   int warp_id = threadIdx.x / 32;
   int idx_idx = bid * num_warps + warp_id;
   if (idx_idx < num_idx) {
- 	    bam_ptr<T> ptr(dr);
+ 	   bam_ptr<T> ptr(dr);
 
         uint64_t row_index = index_ptr[idx_idx] + key_off;
       	uint64_t tid = threadIdx.x % 32;
 
 
     for (; tid < dim; tid += 32) {
-	    T temp = ptr[(row_index) * cache_dim + tid];
-	    out_tensor_ptr[(bid * num_warps + warp_id) * dim + tid] = temp;
+	   // T temp = ptr[(row_index) * cache_dim + tid];
+     const size_t idx = (row_index) * cache_dim + tid;
+     //out_tensor_ptr[(bid * num_warps + warp_id) * dim + tid] = ptr[idx];
+      out_tensor_ptr[(bid * num_warps + warp_id) * dim + tid] = ptr.read(idx);
+
     }
   }
 }
@@ -54,7 +57,8 @@ __global__ void read_feature_kernel_with_cpu_backing_memory(array_d_t<T> *dr, ra
 
         else{
         for (; tid < dim; tid += 32) {
-          T temp = ptr[(row_index) * cache_dim + tid];
+          //T temp = ptr[(row_index) * cache_dim + tid];
+          T temp = ptr.read((row_index) * cache_dim + tid);
           out_tensor_ptr[(bid * num_warps + warp_id) * dim + tid] = temp;
         }
       }
@@ -72,7 +76,8 @@ __global__ void read_feature_kernel_with_cpu_backing_memory(array_d_t<T> *dr, ra
 
         else{
           for (; tid < dim; tid += 32) {
-            T temp = ptr[(row_index) * cache_dim + tid];
+            //T temp = ptr[(row_index) * cache_dim + tid];
+            T temp = ptr.read((row_index) * cache_dim + tid);
             out_tensor_ptr[(bid * num_warps + warp_id) * dim + tid] = temp;
           }
         }
